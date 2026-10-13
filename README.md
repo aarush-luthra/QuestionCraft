@@ -380,6 +380,9 @@ dvc pull
 
 ```
 QuestionCraft/
+├── .github/
+│   └── workflows/
+│       └── ci.yml                   # Automated GitHub Actions CI workflow (linting & testing)
 ├── .dvc/                            # DVC internal metadata & remote configuration
 │   └── config                       # Configured local and Google Drive storage remotes
 ├── configs/
@@ -421,6 +424,9 @@ QuestionCraft/
 │       ├── figure6_rvce_curriculum_breakdown.png
 │       ├── figure7_duplicate_detection_similarity.png
 │       └── figure8_computational_thinking_skills.png
+├── scripts/
+│   ├── run_phase1_pipeline.py       # Orchestrator script to run Phase 1 stages end-to-end
+│   └── verify_environment.py        # Diagnostic script verifying dependencies & runtime
 ├── src/
 │   ├── __init__.py
 │   ├── data/
@@ -428,12 +434,23 @@ QuestionCraft/
 │   │   ├── download.py              # Ingests and normalizes ARC, RACE, SciQ, and Bloom datasets
 │   │   ├── feature_engineering.py   # FeatureExtractor class: readability, POS, Bloom & CT triggers
 │   │   └── preprocess.py            # Preprocesses raw datasets and outputs engineered feature parquets
-│   └── models/
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── difficulty_classifier.py # Difficulty classifier training (Baseline LR + XGBoost)
+│   │   ├── blooms_classifier.py     # 6-class Bloom's Taxonomy classifier (L1–L6)
+│   │   ├── ct_classifier.py         # Multi-label Computational Thinking classifier
+│   │   └── duplicate_detector.py    # Semantic duplicate detector via sentence-transformers
+│   └── utils/
 │       ├── __init__.py
-│       ├── difficulty_classifier.py # Difficulty classifier training (Baseline LR + XGBoost)
-│       ├── blooms_classifier.py     # 6-class Bloom's Taxonomy classifier (L1–L6)
-│       ├── ct_classifier.py         # Multi-label Computational Thinking classifier
-│       └── duplicate_detector.py    # Semantic duplicate detector via sentence-transformers
+│       ├── config.py                # Configuration loader and path resolver
+│       ├── hashing.py               # Deterministic DataFrame and file MD5 hashing
+│       └── seed.py                  # Global reproducibility random seed setter
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py                  # Shared pytest fixtures (mock questions & dataframes)
+│   ├── test_feature_engineering.py  # Unit tests for FeatureExtractor & linguistic metrics
+│   ├── test_models.py               # Unit tests for classifier logic and label normalizers
+│   └── test_utils.py                # Unit tests for config, hashing, and reproducibility seeds
 ├── .gitattributes                   # Linguist overrides to exclude reports from code stats
 ├── .gitignore                       # Git ignore policies for binaries, models, and virtual environments
 ├── dvc.lock                         # DVC lockfile capturing exact pipeline execution state

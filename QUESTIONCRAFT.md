@@ -56,27 +56,36 @@ QuestionCraft
 ## 📂 Repository Structure
 
 ```
-quespaper/
+QuestionCraft/
+├── .github/workflows/ci.yml       # GitHub Actions CI workflow (linting & pytest)
 ├── configs/
 │   └── model_config.yaml          # Pinned hyperparameters for all models
 ├── data/
 │   ├── raw/
 │   │   └── rvce/
-│   │       └── question_bank.json # Mock RVCE questions with manual tags
+│   │       ├── question_bank.json # Curated RVCE DSA questions with manual tags
+│   │       └── uhv_hs248at.json   # Curated RVCE UHV questions
 │   └── processed/                 # Processed Parquet files (DVC-tracked)
-├── notebooks/                     # Exploratory data analysis notebooks
+├── models/                        # Serialized model artifacts (.pkl)
+├── notebooks/                     # Exploratory data analysis notebooks & generator
+├── reports/                       # Standalone EDA HTML report & figure PNGs
+├── scripts/                       # Environment verification & pipeline runners
 ├── src/
 │   ├── data/
 │   │   ├── download.py            # Downloads ARC, RACE, SciQ, Bloom's datasets
-│   │   └── feature_engineering.py # FeatureExtractor class (readability, POS, etc.)
-│   └── models/
-│       ├── difficulty_classifier.py   # TF-IDF + Logistic Regression (Easy/Med/Hard)
-│       ├── blooms_classifier.py       # L1–L6 Bloom's Taxonomy classifier
-│       ├── ct_classifier.py           # Multi-label CT skill classifier (OvR LR)
-│       └── duplicate_detector.py      # Cosine similarity via sentence-transformers
+│   │   ├── feature_engineering.py # FeatureExtractor class (readability, POS, etc.)
+│   │   └── preprocess.py          # Data normalizer and feature parquet builder
+│   ├── models/
+│   │   ├── difficulty_classifier.py   # TF-IDF + Logistic Regression / XGBoost
+│   │   ├── blooms_classifier.py       # L1–L6 Bloom's Taxonomy classifier
+│   │   ├── ct_classifier.py           # Multi-label CT skill classifier (OvR LR)
+│   │   └── duplicate_detector.py      # Cosine similarity via sentence-transformers
+│   └── utils/                     # Config loader, seed setter, dataframe MD5 hashing
+├── tests/                         # Automated unit & integration tests
 ├── dvc.yaml                       # DVC pipeline definition
 ├── pyproject.toml                 # Pinned dependencies & random seeds
-└── QUESTIONCRAFT.md               # This file
+├── README.md                      # Primary architecture documentation
+└── QUESTIONCRAFT.md               # Phase 1 specification guide
 ```
 
 ---
