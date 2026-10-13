@@ -1,0 +1,6 @@
+# DVC will not track these paths
+mlruns/
+tmp_artifacts/
+**/__pycache__/
+**/*.pyc
+.git/

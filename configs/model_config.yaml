@@ -1,0 +1,140 @@
+# =============================================================================
+# QuestionCraft — Model Hyperparameter Configuration
+# All values pinned for reproducibility (Phase 1)
+# =============================================================================
+
+global:
+  random_seed: 42
+  test_size: 0.2
+  val_size: 0.1
+  mlflow_tracking_uri: "mlruns"
+  mlflow_experiment_prefix: "questioncraft"
+
+# ── TF-IDF Vectorizer (shared baseline) ───────────────────────────────────────
+tfidf:
+  max_features: 20000
+  ngram_range: [1, 2]
+  sublinear_tf: true
+  min_df: 2
+  max_df: 0.95
+  analyzer: "word"
+  strip_accents: "unicode"
+  token_pattern: "(?u)\\b\\w\\w+\\b"
+
+# ── Difficulty Classifier ──────────────────────────────────────────────────────
+difficulty_classifier:
+  model_type: "logistic_regression"
+  labels: ["Easy", "Medium", "Hard"]
+  mlflow_experiment: "questioncraft_difficulty"
+  logistic_regression:
+    C: 1.0
+    solver: "lbfgs"
+    max_iter: 1000
+    multi_class: "multinomial"
+    class_weight: "balanced"
+    random_state: 42
+  # XGBoost fallback config
+  xgboost:
+    n_estimators: 200
+    max_depth: 6
+    learning_rate: 0.1
+    subsample: 0.8
+    colsample_bytree: 0.8
+    use_label_encoder: false
+    eval_metric: "mlogloss"
+    random_state: 42
+
+# ── Bloom's Taxonomy Classifier ───────────────────────────────────────────────
+blooms_classifier:
+  model_type: "logistic_regression"
+  labels: ["L1-Remember", "L2-Understand", "L3-Apply", "L4-Analyze", "L5-Evaluate", "L6-Create"]
+  label_ids: [1, 2, 3, 4, 5, 6]
+  mlflow_experiment: "questioncraft_blooms"
+  logistic_regression:
+    C: 0.5
+    solver: "lbfgs"
+    max_iter: 2000
+    multi_class: "multinomial"
+    class_weight: "balanced"
+    random_state: 42
+  xgboost:
+    n_estimators: 300
+    max_depth: 7
+    learning_rate: 0.05
+    subsample: 0.8
+    colsample_bytree: 0.7
+    eval_metric: "mlogloss"
+    random_state: 42
+
+# ── CT Skill Classifier (Multi-Label) ─────────────────────────────────────────
+ct_classifier:
+  model_type: "ovr_logistic_regression"
+  labels:
+    - "Decomposition"
+    - "Pattern Recognition"
+    - "Abstraction"
+    - "Algorithmic Thinking"
+    - "Evaluation & Debugging"
+  mlflow_experiment: "questioncraft_ct"
+  logistic_regression:
+    C: 1.0
+    solver: "lbfgs"
+    max_iter: 1000
+    class_weight: "balanced"
+    random_state: 42
+  similarity_threshold: 0.5   # probability threshold for multi-label binarisation
+
+# ── Duplicate Detector ────────────────────────────────────────────────────────
+duplicate_detector:
+  model_name: "all-MiniLM-L6-v2"
+  cosine_threshold: 0.85      # flag pairs above this as duplicates
+  batch_size: 64
+  device: "cpu"               # "cuda" if GPU available
+
+# ── Feature Engineering ───────────────────────────────────────────────────────
+feature_engineering:
+  readability:
+    - "flesch_reading_ease"
+    - "coleman_liau_index"
+    - "automated_readability_index"
+    - "dale_chall_readability_score"
+  pos_tags: ["NN", "VB", "JJ", "RB", "WP"]   # track noun/verb/adj/adv/wh-word counts
+  blooms_verbs:
+    L1: ["define", "list", "recall", "identify", "name", "state", "label", "recognize"]
+    L2: ["explain", "describe", "summarize", "interpret", "classify", "compare", "paraphrase"]
+    L3: ["apply", "solve", "compute", "execute", "implement", "use", "demonstrate", "calculate"]
+    L4: ["analyze", "differentiate", "distinguish", "examine", "break down", "infer", "relate"]
+    L5: ["evaluate", "judge", "critique", "justify", "assess", "argue", "defend", "prioritize"]
+    L6: ["create", "design", "construct", "develop", "formulate", "generate", "plan", "produce"]
+  ct_keywords:
+    Decomposition: ["break", "sub-problem", "divide", "decompose", "modularize", "partition", "split"]
+    Pattern Recognition: ["pattern", "trend", "similarity", "recurring", "sequence", "classify", "group"]
+    Abstraction: ["abstract", "generalize", "model", "simplify", "represent", "hide", "interface"]
+    Algorithmic Thinking: ["algorithm", "step", "procedure", "flowchart", "pseudocode", "iterate", "loop", "sort"]
+    Evaluation & Debugging: ["debug", "trace", "error", "test", "evaluate", "optimize", "refine", "fix", "verify"]
+
+# ── Data Sources ──────────────────────────────────────────────────────────────
+data:
+  raw_dir: "data/raw"
+  processed_dir: "data/processed"
+  rvce_bank: "data/raw/rvce/question_bank.json"   # legacy DSA mock bank
+  rvce_banks:                                      # all RVCE datasets (merged at preprocess time)
+    - "data/raw/rvce/question_bank.json"
+    - "data/raw/rvce/uhv_hs248at.json"
+  datasets:
+    arc:
+      hf_path: "allenai/ai2_arc"
+      hf_name: "ARC-Challenge"
+      splits: ["train", "validation", "test"]
+    arc_easy:
+      hf_path: "allenai/ai2_arc"
+      hf_name: "ARC-Easy"
+      splits: ["train", "validation", "test"]
+    race:
+      hf_path: "ehovy/race"
+      hf_name: "all"
+      splits: ["train", "validation", "test"]
+    sciq:
+      hf_path: "allenai/sciq"
+      hf_name: null
+      splits: ["train", "validation", "test"]

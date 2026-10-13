@@ -1,0 +1,54 @@
+# ── Python ─────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.env
+.venv
+venv/
+env/
+*.pyc
+pip-log.txt
+
+# ── Jupyter ────────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_meta
+
+# ── DVC ────────────────────────────────────────────────────────────────────────
+/tmp/
+tmp_artifacts/
+
+# ── MLflow ─────────────────────────────────────────────────────────────────────
+mlruns/
+mlartifacts/
+
+# ── Models (tracked by DVC, not git) ──────────────────────────────────────────
+models/*.pkl
+models/*.joblib
+models/*.pt
+models/*.onnx
+
+# ── Data (tracked by DVC, not git) ────────────────────────────────────────────
+data/raw/arc/
+data/raw/race/
+data/raw/sciq/
+data/raw/blooms/
+data/processed/*.parquet
+# Keep RVCE question bank in git (small, manually curated)
+!data/raw/rvce/
+
+# ── OS & editor ────────────────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ── Uploaded raw data files at root (tracked by DVC) ─────────────────────────
+bloomsdata.zip
+"rvce - uhv.json"

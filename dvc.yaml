@@ -1,0 +1,141 @@
+# =============================================================================
+# QuestionCraft — DVC Pipeline
+# Run with: dvc repro
+# =============================================================================
+
+stages:
+
+  # ── Stage 1: Download raw datasets ─────────────────────────────────────────
+  download:
+    cmd: python -m src.data.download --config configs/model_config.yaml
+    deps:
+      - src/data/download.py
+      - configs/model_config.yaml
+    outs:
+      - data/raw/arc:
+          cache: true
+          persist: false
+      - data/raw/race:
+          cache: true
+          persist: false
+      - data/raw/sciq:
+          cache: true
+          persist: false
+      - data/raw/blooms:
+          cache: true
+          persist: false
+    params:
+      - configs/model_config.yaml:
+          - data.datasets
+          - global.random_seed
+
+  # ── Stage 2: Preprocess + Feature Extraction ────────────────────────────────
+  preprocess:
+    cmd: python -m src.data.preprocess --config configs/model_config.yaml
+    deps:
+      - src/data/preprocess.py
+      - src/data/feature_engineering.py
+      - data/raw/arc
+      - data/raw/race
+      - data/raw/sciq
+      - data/raw/blooms
+      - data/raw/rvce/question_bank.json
+      - configs/model_config.yaml
+    outs:
+      - data/processed/difficulty_dataset.parquet:
+          cache: true
+      - data/processed/blooms_dataset.parquet:
+          cache: true
+      - data/processed/ct_dataset.parquet:
+          cache: true
+      - data/processed/data_hashes.json:
+          cache: false      # always re-read; small metadata file
+    params:
+      - configs/model_config.yaml:
+          - global.random_seed
+          - global.test_size
+          - feature_engineering
+
+  # ── Stage 3a: Train Difficulty Classifier ──────────────────────────────────
+  train_difficulty:
+    cmd: >
+      python -m src.models.difficulty_classifier
+        --config configs/model_config.yaml
+        --model-out models/difficulty_classifier.pkl
+    deps:
+      - src/models/difficulty_classifier.py
+      - data/processed/difficulty_dataset.parquet
+      - data/processed/data_hashes.json
+      - configs/model_config.yaml
+    outs:
+      - models/difficulty_classifier.pkl:
+          cache: true
+    metrics:
+      - mlruns/.trash:
+          cache: false     # MLflow tracks metrics natively; DVC just watches changes
+    params:
+      - configs/model_config.yaml:
+          - global.random_seed
+          - global.test_size
+          - tfidf
+          - difficulty_classifier
+
+  # ── Stage 3b: Train Bloom's Classifier ────────────────────────────────────
+  train_blooms:
+    cmd: >
+      python -m src.models.blooms_classifier
+        --config configs/model_config.yaml
+        --model-out models/blooms_classifier.pkl
+    deps:
+      - src/models/blooms_classifier.py
+      - data/processed/blooms_dataset.parquet
+      - data/processed/data_hashes.json
+      - configs/model_config.yaml
+    outs:
+      - models/blooms_classifier.pkl:
+          cache: true
+    params:
+      - configs/model_config.yaml:
+          - global.random_seed
+          - global.test_size
+          - tfidf
+          - blooms_classifier
+
+  # ── Stage 3c: Train CT Classifier ─────────────────────────────────────────
+  train_ct:
+    cmd: >
+      python -m src.models.ct_classifier
+        --config configs/model_config.yaml
+        --model-out models/ct_classifier.pkl
+    deps:
+      - src/models/ct_classifier.py
+      - data/processed/ct_dataset.parquet
+      - data/processed/data_hashes.json
+      - configs/model_config.yaml
+    outs:
+      - models/ct_classifier.pkl:
+          cache: true
+    params:
+      - configs/model_config.yaml:
+          - global.random_seed
+          - global.test_size
+          - tfidf
+          - ct_classifier
+
+  # ── Stage 4: Duplicate Detection (on RVCE bank) ────────────────────────────
+  detect_duplicates:
+    cmd: >
+      python -m src.models.duplicate_detector
+        --config configs/model_config.yaml
+        --input data/raw/rvce/question_bank.json
+        --out-dir data/processed
+    deps:
+      - src/models/duplicate_detector.py
+      - data/raw/rvce/question_bank.json
+      - configs/model_config.yaml
+    outs:
+      - data/processed/duplicates_question_bank.parquet:
+          cache: true
+    params:
+      - configs/model_config.yaml:
+          - duplicate_detector
