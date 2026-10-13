@@ -153,7 +153,10 @@ class DuplicateDetector:
                     "cosine_similarity": round(sim, 6),
                 })
 
-        result_df = pd.DataFrame(flagged).sort_values("cosine_similarity", ascending=False)
+        if not flagged:
+            result_df = pd.DataFrame(columns=["id_a", "question_a", "id_b", "question_b", "cosine_similarity"])
+        else:
+            result_df = pd.DataFrame(flagged).sort_values("cosine_similarity", ascending=False)
         logger.info(
             "Found %d duplicate pair(s) above threshold=%.2f out of %d pairs.",
             len(result_df),

@@ -105,7 +105,6 @@ def build_pipeline(cfg: dict) -> Pipeline:
         C=lr_cfg["C"],
         solver=lr_cfg["solver"],
         max_iter=lr_cfg["max_iter"],
-        multi_class=lr_cfg["multi_class"],
         class_weight=lr_cfg["class_weight"],
         random_state=lr_cfg["random_state"],
     )

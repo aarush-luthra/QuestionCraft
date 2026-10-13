@@ -26,12 +26,17 @@ tmp_artifacts/
 # ── MLflow ─────────────────────────────────────────────────────────────────────
 mlruns/
 mlartifacts/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
 
 # ── Models (tracked by DVC, not git) ──────────────────────────────────────────
 models/*.pkl
 models/*.joblib
 models/*.pt
 models/*.onnx
+models/*.parquet
 
 # ── Data (tracked by DVC, not git) ────────────────────────────────────────────
 data/raw/arc/

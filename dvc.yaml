@@ -8,10 +8,7 @@ stages:
 
   # ── Stage 1: Train Difficulty Classifier ──────────────────────────────────
   train_difficulty:
-    cmd: >
-      python -m src.models.difficulty_classifier
-        --config configs/model_config.yaml
-        --model-out models/difficulty_classifier.pkl
+    cmd: python -m src.models.difficulty_classifier --config configs/model_config.yaml --model-out models/difficulty_classifier.pkl
     deps:
       - src/models/difficulty_classifier.py
       - data/processed
@@ -28,10 +25,7 @@ stages:
 
   # ── Stage 2: Train Bloom's Taxonomy Classifier ────────────────────────────
   train_blooms:
-    cmd: >
-      python -m src.models.blooms_classifier
-        --config configs/model_config.yaml
-        --model-out models/blooms_classifier.pkl
+    cmd: python -m src.models.blooms_classifier --config configs/model_config.yaml --model-out models/blooms_classifier.pkl
     deps:
       - src/models/blooms_classifier.py
       - data/processed
@@ -48,10 +42,7 @@ stages:
 
   # ── Stage 3: Train Computational Thinking (CT) Classifier ─────────────────
   train_ct:
-    cmd: >
-      python -m src.models.ct_classifier
-        --config configs/model_config.yaml
-        --model-out models/ct_classifier.pkl
+    cmd: python -m src.models.ct_classifier --config configs/model_config.yaml --model-out models/ct_classifier.pkl
     deps:
       - src/models/ct_classifier.py
       - data/processed
@@ -68,17 +59,13 @@ stages:
 
   # ── Stage 4: Semantic Duplicate Detection ─────────────────────────────────
   detect_duplicates:
-    cmd: >
-      python -m src.models.duplicate_detector
-        --config configs/model_config.yaml
-        --input data/raw/rvce/question_bank.json
-        --out-dir data/processed
+    cmd: python -m src.models.duplicate_detector --config configs/model_config.yaml --input data/raw/rvce/question_bank.json --out-dir models
     deps:
       - src/models/duplicate_detector.py
       - data/raw
       - configs/model_config.yaml
     outs:
-      - data/processed/duplicates_question_bank.parquet:
+      - models/duplicates_question_bank.parquet:
           cache: true
     params:
       - configs/model_config.yaml:

@@ -1,0 +1,214 @@
+schema: '2.0'
+stages:
+  train_difficulty:
+    cmd: python -m src.models.difficulty_classifier --config 
+      configs/model_config.yaml --model-out models/difficulty_classifier.pkl
+    deps:
+    - path: configs/model_config.yaml
+      hash: md5
+      md5: fef001b79e76448b29f34f1da928a35e
+      size: 5777
+    - path: data/processed
+      hash: md5
+      md5: a27d722174acfa24bb619dd603f6f8a6.dir
+      size: 10953915
+      nfiles: 5
+    - path: src/models/difficulty_classifier.py
+      hash: md5
+      md5: 31148125cf7a0fa6111af49fc56cacae
+      size: 11497
+    params:
+      configs/model_config.yaml:
+        difficulty_classifier:
+          model_type: logistic_regression
+          labels:
+          - Easy
+          - Medium
+          - Hard
+          mlflow_experiment: questioncraft_difficulty
+          logistic_regression:
+            C: 1.0
+            solver: lbfgs
+            max_iter: 1000
+            multi_class: multinomial
+            class_weight: balanced
+            random_state: 42
+          xgboost:
+            n_estimators: 200
+            max_depth: 6
+            learning_rate: 0.1
+            subsample: 0.8
+            colsample_bytree: 0.8
+            use_label_encoder: false
+            eval_metric: mlogloss
+            random_state: 42
+        global.random_seed: 42
+        global.test_size: 0.2
+        tfidf:
+          max_features: 20000
+          ngram_range:
+          - 1
+          - 2
+          sublinear_tf: true
+          min_df: 2
+          max_df: 0.95
+          analyzer: word
+          strip_accents: unicode
+          token_pattern: (?u)\b\w\w+\b
+    outs:
+    - path: models/difficulty_classifier.pkl
+      hash: md5
+      md5: f6c4408f1eac0f22b4f832b71f9cf7ca
+      size: 1265524
+  train_blooms:
+    cmd: python -m src.models.blooms_classifier --config 
+      configs/model_config.yaml --model-out models/blooms_classifier.pkl
+    deps:
+    - path: configs/model_config.yaml
+      hash: md5
+      md5: fef001b79e76448b29f34f1da928a35e
+      size: 5777
+    - path: data/processed
+      hash: md5
+      md5: a27d722174acfa24bb619dd603f6f8a6.dir
+      size: 10953915
+      nfiles: 5
+    - path: src/models/blooms_classifier.py
+      hash: md5
+      md5: 5633298a94bfccf183582d9b165b3b0f
+      size: 10090
+    params:
+      configs/model_config.yaml:
+        blooms_classifier:
+          model_type: logistic_regression
+          labels:
+          - L1-Remember
+          - L2-Understand
+          - L3-Apply
+          - L4-Analyze
+          - L5-Evaluate
+          - L6-Create
+          label_ids:
+          - 1
+          - 2
+          - 3
+          - 4
+          - 5
+          - 6
+          mlflow_experiment: questioncraft_blooms
+          logistic_regression:
+            C: 0.5
+            solver: lbfgs
+            max_iter: 2000
+            multi_class: multinomial
+            class_weight: balanced
+            random_state: 42
+          xgboost:
+            n_estimators: 300
+            max_depth: 7
+            learning_rate: 0.05
+            subsample: 0.8
+            colsample_bytree: 0.7
+            eval_metric: mlogloss
+            random_state: 42
+        global.random_seed: 42
+        global.test_size: 0.2
+        tfidf:
+          max_features: 20000
+          ngram_range:
+          - 1
+          - 2
+          sublinear_tf: true
+          min_df: 2
+          max_df: 0.95
+          analyzer: word
+          strip_accents: unicode
+          token_pattern: (?u)\b\w\w+\b
+    outs:
+    - path: models/blooms_classifier.pkl
+      hash: md5
+      md5: 3ff971847f145546515a2e4d5470a9a8
+      size: 636764
+  train_ct:
+    cmd: python -m src.models.ct_classifier --config configs/model_config.yaml 
+      --model-out models/ct_classifier.pkl
+    deps:
+    - path: configs/model_config.yaml
+      hash: md5
+      md5: fef001b79e76448b29f34f1da928a35e
+      size: 5777
+    - path: data/processed
+      hash: md5
+      md5: a27d722174acfa24bb619dd603f6f8a6.dir
+      size: 10953915
+      nfiles: 5
+    - path: src/models/ct_classifier.py
+      hash: md5
+      md5: fd01f43b346b6fa79b3cec23f3c3d216
+      size: 10811
+    params:
+      configs/model_config.yaml:
+        ct_classifier:
+          model_type: ovr_logistic_regression
+          labels:
+          - Decomposition
+          - Pattern Recognition
+          - Abstraction
+          - Algorithmic Thinking
+          - Evaluation & Debugging
+          mlflow_experiment: questioncraft_ct
+          logistic_regression:
+            C: 1.0
+            solver: lbfgs
+            max_iter: 1000
+            class_weight: balanced
+            random_state: 42
+          similarity_threshold: 0.5
+        global.random_seed: 42
+        global.test_size: 0.2
+        tfidf:
+          max_features: 20000
+          ngram_range:
+          - 1
+          - 2
+          sublinear_tf: true
+          min_df: 2
+          max_df: 0.95
+          analyzer: word
+          strip_accents: unicode
+          token_pattern: (?u)\b\w\w+\b
+    outs:
+    - path: models/ct_classifier.pkl
+      hash: md5
+      md5: 4a383730a7e802bb1114d037eeec863b
+      size: 45073
+  detect_duplicates:
+    cmd: python -m src.models.duplicate_detector --config 
+      configs/model_config.yaml --input data/raw/rvce/question_bank.json 
+      --out-dir models
+    deps:
+    - path: configs/model_config.yaml
+      hash: md5
+      md5: fef001b79e76448b29f34f1da928a35e
+      size: 5777
+    - path: data/raw
+      hash: md5
+      md5: 2be67997c625406892e8aeaca78ae150.dir
+      size: 62352557
+      nfiles: 17
+    - path: src/models/duplicate_detector.py
+      hash: md5
+      md5: ec845c7c97a6ab60f330c06241e061a6
+      size: 10704
+    params:
+      configs/model_config.yaml:
+        duplicate_detector:
+          model_name: all-MiniLM-L6-v2
+          cosine_threshold: 0.85
+          batch_size: 64
+          device: cpu
+    outs:
+    - path: models/duplicates_question_bank.parquet
+      hash: md5
+      md5: 1dc85765491243ee8ec6a22fa7de3fe3
+      size: 2747

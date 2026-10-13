@@ -41,6 +41,7 @@ from sklearn.metrics import (
     recall_score,
 )
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
+from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.pipeline import Pipeline
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.preprocessing import LabelEncoder
@@ -74,10 +75,31 @@ def df_md5(df: pd.DataFrame) -> str:
 
 # ── Model Builder ──────────────────────────────────────────────────────────────
 
-def build_pipeline(cfg: dict) -> Pipeline:
-    tfidf_cfg = cfg["tfidf"]
-    lr_cfg = cfg["difficulty_classifier"]["logistic_regression"]
+class LabelEncodedXGBClassifier(BaseEstimator, ClassifierMixin):
+    def __init__(self, labels=None, **kwargs):
+        self.labels = labels or ["Easy", "Medium", "Hard"]
+        self.kwargs = kwargs
+        self.label_to_id = {l: i for i, l in enumerate(self.labels)}
+        self.id_to_label = {i: l for i, l in enumerate(self.labels)}
+        from xgboost import XGBClassifier
+        self.clf = XGBClassifier(**kwargs)
 
+    def fit(self, X, y):
+        y_enc = np.array([self.label_to_id[l] for l in y])
+        self.clf.fit(X, y_enc)
+        self.classes_ = np.array(self.labels)
+        return self
+
+    def predict(self, X):
+        preds = self.clf.predict(X)
+        return np.array([self.id_to_label[p] for p in preds])
+
+    def predict_proba(self, X):
+        return self.clf.predict_proba(X)
+
+
+def build_pipeline(cfg: dict, model_type: str = "logistic_regression") -> Pipeline:
+    tfidf_cfg = cfg["tfidf"]
     tfidf = TfidfVectorizer(
         max_features=tfidf_cfg["max_features"],
         ngram_range=tuple(tfidf_cfg["ngram_range"]),
@@ -87,15 +109,30 @@ def build_pipeline(cfg: dict) -> Pipeline:
         analyzer=tfidf_cfg["analyzer"],
         strip_accents=tfidf_cfg["strip_accents"],
     )
-    lr = LogisticRegression(
-        C=lr_cfg["C"],
-        solver=lr_cfg["solver"],
-        max_iter=lr_cfg["max_iter"],
-        multi_class=lr_cfg["multi_class"],
-        class_weight=lr_cfg["class_weight"],
-        random_state=lr_cfg["random_state"],
-    )
-    return Pipeline([("tfidf", tfidf), ("clf", lr)])
+
+    if model_type == "xgboost":
+        xgb_cfg = cfg["difficulty_classifier"].get("xgboost", {})
+        clf = LabelEncodedXGBClassifier(
+            labels=cfg["difficulty_classifier"]["labels"],
+            n_estimators=xgb_cfg.get("n_estimators", 150),
+            max_depth=xgb_cfg.get("max_depth", 6),
+            learning_rate=xgb_cfg.get("learning_rate", 0.1),
+            subsample=xgb_cfg.get("subsample", 0.8),
+            colsample_bytree=xgb_cfg.get("colsample_bytree", 0.8),
+            eval_metric=xgb_cfg.get("eval_metric", "mlogloss"),
+            random_state=xgb_cfg.get("random_state", 42),
+            n_jobs=-1,
+        )
+    else:
+        lr_cfg = cfg["difficulty_classifier"]["logistic_regression"]
+        clf = LogisticRegression(
+            C=lr_cfg["C"],
+            solver=lr_cfg["solver"],
+            max_iter=lr_cfg["max_iter"],
+            class_weight=lr_cfg["class_weight"],
+            random_state=lr_cfg["random_state"],
+        )
+    return Pipeline([("tfidf", tfidf), ("clf", clf)])
 
 
 # ── Evaluation helpers ─────────────────────────────────────────────────────────
@@ -118,7 +155,13 @@ def plot_confusion_matrix(y_true, y_pred, labels: list[str], out_path: Path) -> 
 @click.option("--config", default="configs/model_config.yaml", show_default=True)
 @click.option("--data-path", default=None, help="Override processed data path")
 @click.option("--model-out", default="models/difficulty_classifier.pkl", show_default=True)
-def main(config: str, data_path: str | None, model_out: str) -> None:
+@click.option(
+    "--model",
+    default="logistic_regression",
+    type=click.Choice(["logistic_regression", "xgboost"]),
+    help="Model type: logistic_regression or xgboost",
+)
+def main(config: str, data_path: str | None, model_out: str, model: str) -> None:
     cfg = load_config(config)
     diff_cfg = cfg["difficulty_classifier"]
     processed_dir = Path(cfg["data"]["processed_dir"])
@@ -153,24 +196,29 @@ def main(config: str, data_path: str | None, model_out: str) -> None:
     mlflow.set_tracking_uri(cfg["global"]["mlflow_tracking_uri"])
     mlflow.set_experiment(diff_cfg["mlflow_experiment"])
 
-    with mlflow.start_run(run_name="tfidf_lr_baseline") as run:
-        logger.info("MLflow run: %s", run.info.run_id)
+    run_name = "xgboost_improved" if model == "xgboost" else "tfidf_lr_baseline"
+    with mlflow.start_run(run_name=run_name) as run:
+        logger.info("MLflow run: %s (%s)", run.info.run_id, run_name)
 
         # Log params
+        mlflow.log_param("model_type", model)
         mlflow.log_param("data_hash", data_hash)
         mlflow.log_param("data_file", str(data_file))
         mlflow.log_param("train_size", len(X_train))
         mlflow.log_param("test_size_n", len(X_test))
         mlflow.log_param("seed", SEED)
         mlflow.log_params({f"tfidf_{k}": v for k, v in cfg["tfidf"].items()})
-        mlflow.log_params({
-            f"lr_{k}": v
-            for k, v in diff_cfg["logistic_regression"].items()
-        })
+        if model == "xgboost":
+            mlflow.log_params({f"xgb_{k}": v for k, v in diff_cfg.get("xgboost", {}).items()})
+        else:
+            mlflow.log_params({
+                f"lr_{k}": v
+                for k, v in diff_cfg["logistic_regression"].items()
+            })
 
         # Build & train
-        pipeline = build_pipeline(cfg)
-        logger.info("Training pipeline …")
+        pipeline = build_pipeline(cfg, model_type=model)
+        logger.info("Training pipeline (%s) …", model)
         pipeline.fit(X_train, y_train)
 
         # Cross-validation
@@ -217,13 +265,14 @@ def main(config: str, data_path: str | None, model_out: str) -> None:
         model_path = Path(model_out)
         model_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(pipeline, model_path)
-        mlflow.sklearn.log_model(pipeline, artifact_path="model")
+        try:
+            mlflow.sklearn.log_model(pipeline, artifact_path="model", serialization_format="pickle")
+            model_uri = f"runs:/{run.info.run_id}/model"
+            mlflow.register_model(model_uri, "questioncraft_difficulty_classifier")
+        except Exception as e:
+            logger.warning("Could not register model via mlflow.sklearn: %s", e)
         mlflow.log_artifact(str(model_path))
         logger.info("Model saved → %s", model_path)
-
-        # Register model
-        model_uri = f"runs:/{run.info.run_id}/model"
-        mlflow.register_model(model_uri, "questioncraft_difficulty_classifier")
 
     logger.info("Training complete.")
 
