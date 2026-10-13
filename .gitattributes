@@ -1,0 +1,12 @@
+# GitHub Linguist overrides
+# Treat generated HTML reports and documentation as generated/excluded from language statistics
+reports/** linguist-generated=true
+reports/** linguist-detectable=false
+*.html linguist-detectable=false
+*.html linguist-generated=true
+
+# Keep Jupyter notebooks as documentation/non-detectable for code language stats
+*.ipynb linguist-documentation=true
+
+# Ensure Python is correctly detected as the primary codebase language
+*.py linguist-detectable=true
