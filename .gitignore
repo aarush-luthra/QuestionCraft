@@ -51,4 +51,5 @@ data/processed/*.parquet
 
 # ── Uploaded raw data files at root (tracked by DVC) ─────────────────────────
 bloomsdata.zip
-"rvce - uhv.json"
+rvce - uhv.json
+*uhv*.json
