@@ -338,7 +338,8 @@ The repository contains 8 high-resolution figures generated during Phase 1 explo
 
 *Comprehensive standalone interactive report*: [`reports/eda_report.html`](reports/eda_report.html)  
 *Exploratory Jupyter notebook*: [`notebooks/01_data_exploration.ipynb`](notebooks/01_data_exploration.ipynb)  
-*Comprehensive Phase 1 Architecture & Viva Guide (PDF)*: [`docs/QuestionCraft_Phase1_DeepDive.pdf`](docs/QuestionCraft_Phase1_DeepDive.pdf)
+*Comprehensive Phase 1 Architecture & Viva Guide (PDF)*: [`docs/QuestionCraft_Phase1_DeepDive.pdf`](docs/QuestionCraft_Phase1_DeepDive.pdf)  
+*Phase 1 Technical Specification & Rubric Guide*: [`docs/SPECIFICATION.md`](docs/SPECIFICATION.md)
 
 ---
 
@@ -406,7 +407,8 @@ QuestionCraft/
 │       ├── ct_dataset.parquet         # Preprocessed Computational Thinking corpus
 │       └── data_hashes.json           # Cryptographic MD5 hashes of all processed datasets
 ├── docs/
-│   └── QuestionCraft_Phase1_DeepDive.pdf # Comprehensive Phase 1 architecture & viva guide
+│   ├── QuestionCraft_Phase1_DeepDive.pdf # Comprehensive Phase 1 architecture & viva guide
+│   └── SPECIFICATION.md             # Detailed Phase 1 technical specification & rubric guide
 ├── models/
 │   ├── .gitkeep
 │   ├── difficulty_classifier.pkl    # Serialized model artifact (XGBoost / Logistic Regression)

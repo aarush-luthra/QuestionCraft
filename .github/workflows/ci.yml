@@ -28,7 +28,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install --no-deps -e .
-        pip install scikit-learn pandas numpy scipy nltk textstat pyyaml pytest pytest-cov ruff black
+        pip install scikit-learn pandas numpy scipy nltk textstat pyyaml pytest pytest-cov ruff black click joblib matplotlib mlflow
         python -m nltk.downloader punkt punkt_tab averaged_perceptron_tagger averaged_perceptron_tagger_eng stopwords
 
     - name: Lint with Ruff

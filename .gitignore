@@ -54,7 +54,8 @@ data/processed/*.parquet
 *.swp
 *.swo
 
-# ── Uploaded raw data files at root (tracked by DVC) ─────────────────────────
-bloomsdata.zip
-rvce - uhv.json
-*uhv*.json
+# ── Caches & Coverage ─────────────────────────────────────────────────────────
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/

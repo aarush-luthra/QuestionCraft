@@ -81,11 +81,12 @@ QuestionCraft/
 │   │   ├── ct_classifier.py           # Multi-label CT skill classifier (OvR LR)
 │   │   └── duplicate_detector.py      # Cosine similarity via sentence-transformers
 │   └── utils/                     # Config loader, seed setter, dataframe MD5 hashing
-├── tests/                         # Automated unit & integration tests
+├── docs/                          # Architecture guides & specifications
+│   ├── QuestionCraft_Phase1_DeepDive.pdf # Phase 1 architecture & viva guide
+│   └── SPECIFICATION.md           # Phase 1 specification & rubric guide
 ├── dvc.yaml                       # DVC pipeline definition
 ├── pyproject.toml                 # Pinned dependencies & random seeds
-├── README.md                      # Primary architecture documentation
-└── QUESTIONCRAFT.md               # Phase 1 specification guide
+└── README.md                      # Primary architecture documentation
 ```
 
 ---
