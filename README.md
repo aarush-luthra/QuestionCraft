@@ -337,7 +337,8 @@ The repository contains 8 high-resolution figures generated during Phase 1 explo
 | **[Figure 8](reports/figures/figure8_computational_thinking_skills.png)** | **CT Competency Distribution** | Multi-label frequency of Computational Thinking skills: Algorithmic Thinking (44%) and Decomposition (28%) lead technical questions. |
 
 *Comprehensive standalone interactive report*: [`reports/eda_report.html`](reports/eda_report.html)  
-*Exploratory Jupyter notebook*: [`notebooks/01_data_exploration.ipynb`](notebooks/01_data_exploration.ipynb)
+*Exploratory Jupyter notebook*: [`notebooks/01_data_exploration.ipynb`](notebooks/01_data_exploration.ipynb)  
+*Comprehensive Phase 1 Architecture & Viva Guide (PDF)*: [`docs/QuestionCraft_Phase1_DeepDive.pdf`](docs/QuestionCraft_Phase1_DeepDive.pdf)
 
 ---
 
@@ -404,6 +405,8 @@ QuestionCraft/
 │       ├── blooms_dataset.parquet     # Preprocessed Bloom's taxonomy corpus (76k rows)
 │       ├── ct_dataset.parquet         # Preprocessed Computational Thinking corpus
 │       └── data_hashes.json           # Cryptographic MD5 hashes of all processed datasets
+├── docs/
+│   └── QuestionCraft_Phase1_DeepDive.pdf # Comprehensive Phase 1 architecture & viva guide
 ├── models/
 │   ├── .gitkeep
 │   ├── difficulty_classifier.pkl    # Serialized model artifact (XGBoost / Logistic Regression)
