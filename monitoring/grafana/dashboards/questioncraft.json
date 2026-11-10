@@ -1,0 +1,103 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "API Request Rate",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(questioncraft_requests_total[5m])",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "unit": "s" }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "Request Latency",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(questioncraft_request_latency_seconds_total[5m])",
+          "legendFormat": "{{endpoint}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "thresholds" }, "thresholds": { "steps": [{ "color": "red", "value": 0 }, { "color": "green", "value": 1 }] } }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "Models Loaded",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "questioncraft_models_loaded",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" } }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 8, "y": 8 },
+      "id": 4,
+      "title": "Predictions by Model",
+      "type": "piechart",
+      "targets": [
+        {
+          "expr": "questioncraft_predictions_total",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" }
+      },
+      "gridPos": { "h": 4, "w": 8, "x": 16, "y": 8 },
+      "id": 5,
+      "title": "Server Uptime",
+      "type": "stat",
+      "targets": [
+        {
+          "expr": "questioncraft_uptime_seconds",
+          "legendFormat": "uptime",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["questioncraft", "mlops", "rvce"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "QuestionCraft MLOps Dashboard",
+  "uid": "questioncraft-mlops",
+  "version": 1
+}
+
