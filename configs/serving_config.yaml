@@ -1,0 +1,41 @@
+# =============================================================================
+# QuestionCraft — Serving Configuration (Phase 2)
+# =============================================================================
+
+# ── API Server ────────────────────────────────────────────────────────────────
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 2
+  log_level: "info"
+
+# ── Model Loading ─────────────────────────────────────────────────────────────
+models_dir: "models"
+mlflow_tracking_uri: "sqlite:///mlflow.db"
+
+# ── Deployment Strategy ───────────────────────────────────────────────────────
+# Blue-Green: canary_ratio = 0.0 (all production)
+# Canary:     canary_ratio = 0.1 (10% to staging model)
+# Full cutover: canary_ratio = 1.0 (all staging/new model)
+canary_ratio: 0.0
+
+# ── Quality Gates (model promotion thresholds) ────────────────────────────────
+quality_gates:
+  min_accuracy: 0.85
+  min_f1_macro: 0.30
+  max_regression_pct: 0.02
+  min_cv_stability: 0.05
+  min_test_samples: 100
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+monitoring:
+  prometheus_enabled: true
+  drift_check_interval_hours: 24
+  drift_report_dir: "reports/drift"
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+cors:
+  allow_origins: ["*"]
+  allow_methods: ["*"]
+  allow_headers: ["*"]
+
