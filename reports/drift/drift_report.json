@@ -1,0 +1,74 @@
+{
+  "timestamp": "2026-11-06T07:54:31.441322",
+  "reference_size": 500,
+  "current_size": 500,
+  "feature_drift": {
+    "word_count": {
+      "type": "numerical",
+      "test": "Kolmogorov-Smirnov",
+      "statistic": 0.09,
+      "p_value": 0.034795,
+      "drift_detected": true,
+      "reference_mean": 25.0547,
+      "current_mean": 26.155,
+      "reference_std": 7.85,
+      "current_std": 7.8812
+    },
+    "flesch_reading_ease": {
+      "type": "numerical",
+      "test": "Kolmogorov-Smirnov",
+      "statistic": 0.092,
+      "p_value": 0.028996,
+      "drift_detected": true,
+      "reference_mean": 55.4774,
+      "current_mean": 53.0134,
+      "reference_std": 14.67,
+      "current_std": 15.4616
+    },
+    "question_marks": {
+      "type": "numerical",
+      "test": "Kolmogorov-Smirnov",
+      "statistic": 0.036,
+      "p_value": 0.902691,
+      "drift_detected": false,
+      "reference_mean": 1.026,
+      "current_mean": 0.964,
+      "reference_std": 0.9815,
+      "current_std": 0.9822
+    },
+    "difficulty": {
+      "type": "categorical",
+      "test": "Chi-Squared",
+      "statistic": 0.002911,
+      "p_value": 0.998546,
+      "drift_detected": false,
+      "new_categories": [],
+      "reference_distribution": {
+        "Easy": 0.428,
+        "Medium": 0.374,
+        "Hard": 0.198
+      },
+      "current_distribution": {
+        "Easy": 0.412,
+        "Medium": 0.4,
+        "Hard": 0.188
+      }
+    }
+  },
+  "prediction_drift": {},
+  "data_quality": {
+    "total_rows": 500,
+    "total_columns": 4,
+    "missing_values": {},
+    "duplicate_rows": 0,
+    "empty_strings": {
+      "difficulty": 0
+    }
+  },
+  "overall_drift_detected": true,
+  "drift_summary": {
+    "total_features_checked": 4,
+    "features_with_drift": 2,
+    "drift_ratio": 0.5
+  }
+}
