@@ -1,0 +1,9 @@
+# QuestionCraft Kubernetes Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: questioncraft
+  labels:
+    app: questioncraft
+    project: mlops-rvce
+    phase: "2"

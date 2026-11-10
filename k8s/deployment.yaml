@@ -1,0 +1,151 @@
+# =============================================================================
+# QuestionCraft — Kubernetes Deployment
+# =============================================================================
+# Implements:
+# - Rolling Update strategy (Blue-Green deployment)
+# - Liveness and Readiness probes (health monitoring)
+# - Resource limits (CPU/memory management)
+# - ConfigMap-based environment configuration
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: questioncraft-api
+  namespace: questioncraft
+  labels:
+    app: questioncraft
+    component: api
+    version: v2.0.0
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: questioncraft
+      component: api
+  # ── Blue-Green / Rolling Update Strategy ───────────────────────────────────
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1          # Deploy 1 new pod before removing old ones
+      maxUnavailable: 0    # Zero downtime — never remove old pods until new ones are ready
+  template:
+    metadata:
+      labels:
+        app: questioncraft
+        component: api
+        version: v2.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: questioncraft-api
+          image: questioncraft-api:2.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: questioncraft-config
+          # ── Resource Limits ────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          # ── Health Probes (Kubernetes self-healing) ─────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # ── Startup probe (allows slow model loading) ──────────────────────
+          startupProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 12   # 12 × 10s = 120s max startup time
+      # ── Pod-level settings ─────────────────────────────────────────────────
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always
+---
+# ── Canary Deployment (for canary release strategy) ─────────────────────────
+# Deploy this alongside the main deployment to test a new model version
+# with a small percentage of traffic before full rollout.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: questioncraft-api-canary
+  namespace: questioncraft
+  labels:
+    app: questioncraft
+    component: api
+    version: v2.1.0-canary
+    track: canary
+spec:
+  replicas: 1   # Single canary replica receives ~25% of traffic (1 out of 3+1)
+  selector:
+    matchLabels:
+      app: questioncraft
+      component: api
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: questioncraft
+        component: api
+        version: v2.1.0-canary
+        track: canary
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "8000"
+    spec:
+      containers:
+        - name: questioncraft-api-canary
+          image: questioncraft-api:2.1.0-canary
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: questioncraft-config
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
