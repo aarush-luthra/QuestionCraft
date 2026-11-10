@@ -1,0 +1,99 @@
+# =============================================================================
+# QuestionCraft — Docker Compose Stack
+# =============================================================================
+# Local development and demo stack:
+#   - questioncraft-api:   FastAPI inference service (port 8000)
+#   - mlflow-server:       MLflow tracking UI (port 5000)
+#   - prometheus:          Metrics collection (port 9090)
+#   - grafana:             Monitoring dashboards (port 3000)
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ── QuestionCraft FastAPI Inference Service ─────────────────────────────────
+  questioncraft-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: questioncraft-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+      - PYTHONPATH=/app
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./models:/app/models:ro
+      - ./configs:/app/configs:ro
+      - mlflow-data:/app/mlflow
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+    networks:
+      - questioncraft-net
+
+  # ── MLflow Tracking Server ─────────────────────────────────────────────────
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.13.0
+    container_name: questioncraft-mlflow
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --host 0.0.0.0
+      --port 5000
+      --backend-store-uri sqlite:///mlflow/mlflow.db
+      --default-artifact-root /mlflow/artifacts
+    volumes:
+      - mlflow-data:/mlflow
+    networks:
+      - questioncraft-net
+
+  # ── Prometheus (Metrics Collection) ────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: questioncraft-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+    networks:
+      - questioncraft-net
+
+  # ── Grafana (Monitoring Dashboards) ────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: questioncraft-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=questioncraft
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/var/lib/grafana/dashboards/questioncraft.json
+    volumes:
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - questioncraft-net
+
+volumes:
+  mlflow-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  questioncraft-net:
+    driver: bridge

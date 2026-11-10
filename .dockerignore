@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# DVC
+.dvc
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.pytest_cache
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Data (mounted as volumes instead)
+data/raw/
+data/processed/
+
+# Reports
+reports/
+notebooks/
+
+# Temp
+tmp_artifacts/
+*.log
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Docs
+*.md
+LICENSE
