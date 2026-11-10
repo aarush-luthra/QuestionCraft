@@ -14,6 +14,8 @@ venv/
 env/
 *.pyc
 pip-log.txt
+.pytest_cache/
+*.log
 
 # ── Jupyter ────────────────────────────────────────────────────────────────────
 .ipynb_checkpoints/
