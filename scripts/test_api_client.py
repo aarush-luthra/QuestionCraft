@@ -5,6 +5,7 @@ Verifies all FastAPI inference endpoints in-memory using TestClient.
 """
 
 from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
@@ -14,6 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from fastapi.testclient import TestClient
+
 from src.serving.app import app
 
 with TestClient(app) as client:
@@ -32,7 +34,9 @@ with TestClient(app) as client:
     assert "monitoring_artifacts" in r.json()
 
     print("\n--- 3. Testing POST /predict ---")
-    sample_q = {"question_text": "Design and implement a cache-aware B-Tree in C++ for large-scale storage."}
+    sample_q = {
+        "question_text": "Design and implement a cache-aware B-Tree in C++ for large-scale storage."
+    }
     r = client.post("/predict", json=sample_q)
     print("Status:", r.status_code)
     print(json.dumps(r.json(), indent=2))
@@ -45,8 +49,12 @@ with TestClient(app) as client:
     batch_q = {
         "questions": [
             {"question_text": "Define a binary search tree and state its properties."},
-            {"question_text": "Apply Dijkstra algorithm to compute shortest paths in a directed graph."},
-            {"question_text": "Synthesize a Red-Black tree deletion routine handling double-black rebalancing."}
+            {
+                "question_text": "Apply Dijkstra algorithm to compute shortest paths in a directed graph."
+            },
+            {
+                "question_text": "Synthesize a Red-Black tree deletion routine handling double-black rebalancing."
+            },
         ]
     }
     r = client.post("/batch/classify", json=batch_q)

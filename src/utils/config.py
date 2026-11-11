@@ -35,7 +35,7 @@ def load_config(config_path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]
     if not path.exists():
         raise FileNotFoundError(f"Configuration file not found: {path.resolve()}")
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 
     logger.debug("Loaded configuration from %s", path)

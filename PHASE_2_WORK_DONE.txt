@@ -1,328 +1,156 @@
 ================================================================================
 QUESTIONCRAFT: PHASE 2 — PRODUCTIONIZATION & DEPLOYMENT
-COMPLETE IMPLEMENTATION & VERIFICATION SUMMARY
+WORK SUMMARY (aligned with the "QuestionCraft Phase 2 Scope" document)
 ================================================================================
 Institution : RV College of Engineering (RVCE), Bengaluru, India
-Department  : Artificial Intelligence & Machine Learning (AIML)
-Course      : AI254TA — Machine Learning Operations (MLOps) [5th Semester]
+Course      : AI254TA — Machine Learning Operations (MLOps), 5th Semester
 Project     : QuestionCraft — Automated OBE Question Classification & Test Assembly
-Status      : ALL DELIVERABLES IMPLEMENTED, TESTED, AND VERIFIED (100% COMPLETE)
-Date        : November 2026
+
+SCOPE
+-----
+In scope : model testing & data validation, model-risk quality gates, MLflow
+           model registry, FastAPI inference service, blue-green & canary
+           deployment, the 11 ML artifacts, Prometheus/Grafana observability,
+           Docker + Compose, GitHub Actions CI/CD.
+Out      : Kubernetes and statistical drift monitoring (removed from the repo).
+
+The data checks are a custom rule-based implementation. Great Expectations and
+Evidently AI are NOT used.
+
+--------------------------------------------------------------------------------
+1. MODEL TESTING & DATA VALIDATION
+--------------------------------------------------------------------------------
+- src/monitoring/model_tests.py: column existence, null ratio <= 1%, allowed
+  label set, minimum length 5, row count 100-500,000, feature mean bounds,
+  no duplicate rows; entry points validate_difficulty_dataset,
+  validate_blooms_dataset, validate_inference_input.
+- clean_text_dataset(): removes too-short texts, texts with conflicting labels
+  and exact duplicates. On the processed difficulty data the raw check fails
+  (22 short texts, 87,772 duplicate rows); after cleaning 191,775 -> 103,989
+  rows and all 8 checks pass.
+- src/data/build_splits.py (DVC stage build_splits): cleans BEFORE splitting,
+  trains on public/proxy data, holds out real RVCE exam papers as a test set
+  and removes any overlap so the held-out set never leaks.
+- Tests: tests/test_model_quality.py, tests/test_models.py,
+  tests/test_feature_engineering.py, tests/test_serving.py, tests/test_utils.py.
+
+--------------------------------------------------------------------------------
+2. MODEL-RISK & QUALITY GATES  (src/monitoring/quality_gates.py)
+--------------------------------------------------------------------------------
+  Minimum accuracy      >= 0.85
+  Minimum F1-macro      >= 0.30
+  No regression         <= 2.0% F1 drop vs current Production
+  Stability             5-fold CV std <= 0.05
+  Reproducibility       training data MD5 hash matches Production's
+  Sample size           >= 100 test samples
+- ModelRegistryManager.evaluate_promotion() runs all 6 gates on the real MLflow
+  metrics of the Staging candidate vs the Production version.
+- scripts/promote_model.py --to production refuses promotion if any gate
+  fails (exit code 1, stages unchanged). TestPromotionIsRefused proves it.
+
+--------------------------------------------------------------------------------
+3. MODEL REGISTRY & PROMOTION  (src/registry/model_manager.py)
+--------------------------------------------------------------------------------
+- Lifecycle None -> Staging -> Production -> Archived (sqlite:///mlflow.db).
+- Every version is tagged with data_hash, data_file, model_type, run_name and
+  key metrics (set at training time; --sync-tags backfills older versions).
+- CLI: --list, --to staging|production (gated), --compare A B, --rollback,
+  --sync-tags.
+
+--------------------------------------------------------------------------------
+4. FASTAPI INFERENCE SERVICE  (src/serving/app.py, schemas.py, model_loader.py)
+--------------------------------------------------------------------------------
+  GET  /health, /docs, /redoc
+  POST /predict, /classify, /batch/classify
+  POST /dedup, /batch/dedup
+  GET  /models/info     serving versions, canary version, ratio, registry stages
+  POST /models/reload   re-reads the registry after a promotion or rollback
+  GET  /artifacts       the 11-artifact manifest
+  GET  /deploy/status, POST /deploy/canary
+  GET  /metrics         Prometheus text exposition format
+
+--------------------------------------------------------------------------------
+5. DEPLOYMENT STRATEGIES (registry + API, no Kubernetes)
+--------------------------------------------------------------------------------
+- Blue-green: Production serves 100%; the Staging candidate is promoted only
+  after the gates pass; POST /models/reload swaps it in; --rollback restores
+  the previous version.
+- Canary: ModelStore routes a configurable share (0.0-1.0) of requests to the
+  Staging model; POST /deploy/canary?ratio=0.1 sets it.
+- scripts/demo_for_evaluator.py drives the real API in-process and prints
+  /models/info at baseline, canary 10%, after promotion and after rollback.
+
+--------------------------------------------------------------------------------
+6. THE 11 ML ARTIFACTS  (src/registry/artifacts.py)
+--------------------------------------------------------------------------------
+   1 Dataset                 data/processed/*.parquet (DVC) + data/splits/
+   2 Preprocessing pipeline  src/data/preprocess.py, src/data/build_splits.py
+   3 Trained models          models/*.pkl (difficulty, Bloom's, CT)
+   4 Model configuration     configs/model_config.yaml
+   5 Evaluation results      MLflow metrics (incl. rvce_* held-out metrics)
+   6 Training logs           MLflow run telemetry
+   7 Feature engineering     src/data/feature_engineering.py
+   8 Tokenizer/vectorizer    TF-IDF saved inside each model pipeline
+   9 Model metadata          MLflow registry version tags
+  10 Deployment artifacts    Dockerfile, docker-compose.yml, CI workflow
+  11 Monitoring artifacts    monitoring/prometheus.yml, Grafana dashboard +
+                             provisioning
+- GET /artifacts lists them; pipeline step 3 verifies every category.
+
+--------------------------------------------------------------------------------
+7. OBSERVABILITY
+--------------------------------------------------------------------------------
+- Metrics: questioncraft_requests_total, questioncraft_request_latency_
+  seconds_total, questioncraft_predictions_total, questioncraft_models_loaded,
+  questioncraft_uptime_seconds. Prometheus scrapes /metrics every 10 s;
+  Grafana shows the provisioned dashboard on port 3000.
+
+--------------------------------------------------------------------------------
+8. DOCKER
+--------------------------------------------------------------------------------
+- Dockerfile: multi-stage (python:3.13-slim), dependencies pinned to the exact
+  versions the models were trained with (requirements-serving.txt), CPU-only
+  torch, single Uvicorn worker, HEALTHCHECK on /health.
+- docker-compose.yml: API (8000), MLflow (5000), Prometheus (9090),
+  Grafana (3000); host ports for MLflow/Grafana are overridable
+  (MLFLOW_HOST_PORT, GRAFANA_HOST_PORT). The MLflow server is the single
+  writer to the registry: the API uses http://mlflow-server:5000 and the host
+  CLI uses MLFLOW_TRACKING_URI=http://localhost:<port> while the stack runs.
+- Verified locally: all four services up, API healthy on registry v5 with
+  v6 as canary, gated promote -> /models/reload -> rollback cycle, Prometheus
+  scraping /metrics, all 5 Grafana panels returning data.
+
+--------------------------------------------------------------------------------
+9. CI/CD  (.github/workflows/ci.yml)
+--------------------------------------------------------------------------------
+  1 Ruff + Black (strict)
+  2 PyTest with coverage on Python 3.10 and 3.11
+  3 Phase 2 pipeline (CI seeds demo artifacts; registry-dependent checks can
+    only pass where the trained registry exists, so this step is non-strict)
+  4 Docker image build
+  5 Smoke test: start the container, /health must return 200 with all models
+    loaded, /predict and /metrics must answer
+  6 Push to a container registry: open question, not implemented
+
+--------------------------------------------------------------------------------
+10. HONEST EVALUATION NOTES
+--------------------------------------------------------------------------------
+- The earlier 0.97 accuracy / 0.95 F1 for the difficulty model came from
+  duplicates leaking between train and test. After de-duplication: LR 0.92 /
+  0.66, XGBoost 0.95 / 0.69 (in-domain).
+- On real RVCE papers (held out, never trained on) the models do not yet beat
+  a majority-class baseline (difficulty 0.46 vs 0.46, Bloom's 0.24 vs 0.47).
+  RVCE difficulty/CT labels are LLM drafts pending faculty review, so these
+  numbers are reported, not gated.
+
+--------------------------------------------------------------------------------
+COMMANDS
+--------------------------------------------------------------------------------
+  python scripts/run_phase2_pipeline.py --skip-server --strict
+  python scripts/demo_for_evaluator.py
+  python -m uvicorn src.serving.app:app --host 0.0.0.0 --port 8000
+  python scripts/promote_model.py --list
+  python scripts/promote_model.py --model difficulty --to production
+  python scripts/promote_model.py --model difficulty --rollback
+  touch mlflow.db && docker compose up -d
 ================================================================================
-
-TABLE OF CONTENTS:
-------------------
-1. EXECUTIVE OVERVIEW & ALIGNMENT
-2. CORE PHASE 2 ARCHITECTURAL COMPONENTS
-   2.1. Model Testing & Data Validation Suite (Great Expectations)
-   2.2. Model Risk & Quality Gate Checks (Unit III Governance)
-   2.3. Statistical Data & Prediction Drift Monitoring (Evidently AI)
-   2.4. Model Registry & Promotion Lifecycle (MLflow Registry)
-   2.5. Deployment Strategies: Blue-Green & Canary (Unit IV)
-   2.6. Production REST API Inference Service (FastAPI + Uvicorn)
-   2.7. Complete 11 ML Artifacts Audit Manifest (Accreditation Compliance)
-   2.8. Docker Multi-Stage Containerization & Compose
-   2.9. Kubernetes Cloud-Native Orchestration (k8s Manifests)
-   2.10. Observability, Metrics & Dashboards (Prometheus + Grafana)
-   2.11. End-to-End CI/CD Automation (GitHub Actions)
-3. INVENTORY OF ALL CREATED & UPDATED FILES
-4. TEST EXECUTION & PIPELINE VERIFICATION RESULTS
-5. EVALUATION DEMO GUIDE & COMMAND CHEAT SHEET
-
-================================================================================
-1. EXECUTIVE OVERVIEW & ALIGNMENT
-================================================================================
-Phase 2 transforms QuestionCraft from Phase 1 experimental models into an
-enterprise-grade, production-hardened MLOps platform for Outcome-Based Education
-(OBE) assessment generation.
-
-The implementation strictly satisfies all requirements of:
-- RVCE AI254TA Course Units:
-    * Unit III: Reproducibility, auditability, data/model versioning, quality assurance.
-    * Unit IV: Deployment strategies (Blue-Green, Canary), Containerization (Docker),
-      Scaling (Kubernetes HPA & Rolling Updates), and CI/CD pipelines.
-    * Unit V: Observability, monitoring, and statistical drift detection.
-- Accreditation Agencies: NBA (Tier-1) & NAAC Criterion 2.6 (Student Performance
-  and Learning Outcomes evaluation).
-- Course Evaluation Slides:
-    * Slide 1 & 2: Blue-Green vs. Canary Deployment & Traffic Routing.
-    * Slide 3: 11 Standard ML Artifact Categories.
-
-================================================================================
-2. CORE PHASE 2 ARCHITECTURAL COMPONENTS
-================================================================================
-
-2.1. Model Testing & Data Validation Suite (Great Expectations-Style)
---------------------------------------------------------------------
-- Implementation: src/monitoring/model_tests.py
-- Unit Tests    : tests/test_model_quality.py (24 tests)
-- Capabilities:
-    * Column existence validation (expect_column_to_exist)
-    * Null-ratio upper-bound enforcement (expect_column_values_not_null, max 1%)
-    * Valid categorical set constraints (expect_column_values_in_set: Easy/Med/Hard)
-    * Minimum character length bounds (expect_column_min_length >= 5 chars)
-    * Table row count range limits (expect_table_row_count_between 100-500,000)
-    * Feature distribution mean bounds (expect_column_mean_between)
-    * Uniqueness verification (expect_no_duplicate_rows)
-    * Complete dataset validation pipelines: validate_difficulty_dataset,
-      validate_blooms_dataset, and validate_inference_input.
-
-2.2. Model Risk & Quality Gate Checks (Unit III Governance)
-----------------------------------------------------------
-- Implementation: src/monitoring/quality_gates.py
-- Capabilities:
-    * Automated pre-promotion validation blocking inferior models from production:
-        1. Minimum Accuracy Gate: Accuracy >= 0.85
-        2. Minimum F1-Macro Gate: F1-macro >= 0.30
-        3. No-Regression Gate   : Max allowed performance drop vs. production <= 2.0%
-        4. Stability Gate       : 5-Fold Cross-Validation standard deviation <= 0.05
-        5. Reproducibility Gate : MD5 data hash matching expected hash
-        6. Sample Size Gate     : Test sample count >= 100
-    * Orchestrated via run_full_quality_check() returning detailed gate verdicts.
-
-2.3. Statistical Data & Prediction Drift Monitoring (Evidently AI-Style)
-------------------------------------------------------------------------
-- Implementation: src/monitoring/drift_detection.py
-- Reports Directory: reports/drift/drift_report.json
-- Capabilities:
-    * Continuous Numerical Feature Drift: Two-sample Kolmogorov-Smirnov (KS) test
-      measuring p-value and KS-statistic across word length, reading ease, etc.
-    * Categorical Label Drift: Chi-squared (chi2) contingency test detecting
-      distribution divergence between reference training and live inferences.
-    * Data Quality Profiling: Missing values, empty strings, duplicate detection.
-    * PredictionDriftMonitor: In-memory tracker logging live predictions and
-      alerting if class distribution deviates by > 15%.
-
-2.4. Model Registry & Promotion Lifecycle (MLflow Model Registry)
------------------------------------------------------------------
-- Implementation: src/registry/model_manager.py
-- Promotion CLI : scripts/promote_model.py
-- Tracking Store: sqlite:///mlflow.db
-- Capabilities:
-    * Versioned model lifecycle: None -> Staging -> Production -> Archived
-    * Quality-gated promotion: Staging models must satisfy all quality gates
-      before being promoted to active Production.
-    * Version comparison: scripts/promote_model.py --compare v1 v2 compares metrics
-      and highlights winning models automatically.
-
-2.5. Deployment Strategies: Blue-Green & Canary (Unit IV)
----------------------------------------------------------
-- Implementation: src/serving/model_loader.py & k8s/deployment.yaml
-- Deployment Strategies:
-    1. Blue-Green Zero-Downtime Deployment:
-       * Production (Blue) serves 100% of traffic. Staging (Green) is deployed
-         and verified in isolation.
-       * Promotion swaps stages in MLflow and Kubernetes with zero request drops.
-       * Instant Disaster Recovery: scripts/promote_model.py --model difficulty --rollback
-         restores the previous production model in < 100ms.
-    2. Canary Deployment:
-       * Configurable traffic splitting (0.0 to 1.0) via POST /deploy/canary?ratio=0.1.
-       * ModelStore routes a defined percentage (e.g., 10%) of live production
-         requests to candidate model in staging while 90% stays on baseline.
-       * Kubernetes Canary Track: Dedicated 1-replica canary deployment runs alongside
-         3 stable production replicas under a shared service selector.
-
-2.6. Production REST API Inference Service (FastAPI + Uvicorn)
---------------------------------------------------------------
-- Implementation: src/serving/app.py & src/serving/schemas.py
-- Runtime       : Uvicorn ASGI Server on http://0.0.0.0:8000
-- Endpoints Implemented & Verified:
-    * GET  /health         : System health, uptime & loaded models (Kubernetes probes)
-    * GET  /docs           : Interactive Swagger UI documentation
-    * GET  /redoc          : Alternative ReDoc API documentation
-    * GET  /artifacts      : 11 ML Artifacts Audit Manifest (JSON export)
-    * GET  /models/info    : Active model versions, canary ratio, and registry stages
-    * GET  /deploy/status  : Active deployment strategy (blue-green / canary)
-    * POST /predict        : Single-question multi-dimensional classification
-    * POST /classify       : Alias for /predict
-    * POST /batch/classify : Batch classification with millisecond latency logging
-    * POST /dedup          : Pairwise semantic duplicate check (sentence-transformers)
-    * POST /batch/dedup    : All-pairs matrix deduplication with threshold filtering
-    * POST /deploy/canary  : Dynamic canary traffic ratio adjustment
-    * GET  /metrics        : Prometheus-compatible text metrics export
-
-2.7. Complete 11 ML Artifacts Audit Manifest (Accreditation Compliance)
------------------------------------------------------------------------
-Mapped directly to the RVCE 5th Semester MLOps Slide 3 requirements:
-  #   Artifact Category               Storage / Format / Path
-  1   Dataset                         DVC-versioned Parquet (data/processed/*.parquet)
-  2   Preprocessing Pipeline          src/data/preprocess.py
-  3   Trained Model                   models/*.pkl (Difficulty, Bloom's, CT)
-  4   Model Configuration             configs/model_config.yaml (pinned seeds & params)
-  5   Evaluation Results              MLflow experiment metrics (mlflow.db)
-  6   Training Logs                   MLflow tracking run telemetry
-  7   Feature Engineering Artifacts   src/data/feature_engineering.py (48 features)
-  8   Tokenizer                       Scikit-learn TF-IDF Vectorizer (20k features)
-  9   Model Metadata                  MLflow Model Registry version tags & hashes
-  10  Deployment Artifacts            Dockerfile, docker-compose.yml, k8s/ manifests
-  11  Monitoring Artifacts            reports/drift/drift_report.json, Prometheus, Grafana
-
-2.8. Docker Multi-Stage Containerization & Compose
---------------------------------------------------
-- Dockerfile        : Multi-stage production image (python:3.11-slim)
-    * Stage 1 (Builder)   : Installs compiler build tools and creates wheels.
-    * Stage 2 (Production): Lean runtime image with HEALTHCHECK and Uvicorn server.
-- docker-compose.yml: 4-service coordinated development & evaluation stack:
-    * questioncraft-api  (FastAPI on port 8000)
-    * questioncraft-mlflow (MLflow UI on port 5000)
-    * questioncraft-prometheus (Metrics scraper on port 9090)
-    * questioncraft-grafana (Dashboards on port 3000)
-- .dockerignore     : Excludes caches, DVC data, reports, and dev artifacts.
-
-2.9. Kubernetes Cloud-Native Orchestration (k8s Manifests)
-----------------------------------------------------------
-- Directory: k8s/
-- Manifests Implemented:
-    * k8s/namespace.yaml : Isolated "questioncraft" namespace
-    * k8s/configmap.yaml : Externalized environment variables (logging, URIs, canary)
-    * k8s/deployment.yaml: RollingUpdate deployment (maxSurge=1, maxUnavailable=0),
-      liveness/readiness/startup probes, CPU/RAM limits, and Canary track.
-    * k8s/service.yaml   : NodePort service routing external traffic on port 30800.
-    * k8s/hpa.yaml       : HorizontalPodAutoscaler scaling from 2 to 10 replicas
-      based on 70% CPU and 80% RAM thresholds.
-    * k8s/ingress.yaml   : NGINX Ingress rules routing /docs, /metrics, and /.
-
-2.10. Observability, Metrics & Dashboards (Prometheus + Grafana)
-----------------------------------------------------------------
-- Prometheus: monitoring/prometheus.yml (scrapes FastAPI /metrics every 10s)
-- Grafana Datasource: monitoring/grafana/provisioning/datasources/datasource.yml
-- Grafana Dashboard : monitoring/grafana/dashboards/questioncraft.json
-- Metrics Tracked   :
-    * questioncraft_requests_total (per-endpoint counter)
-    * questioncraft_request_latency_seconds_total (latency timeseries)
-    * questioncraft_predictions_total (predictions broken down by model)
-    * questioncraft_models_loaded (health gauge)
-    * questioncraft_uptime_seconds (server uptime)
-
-2.11. End-to-End CI/CD Automation (GitHub Actions)
---------------------------------------------------
-- Workflow: .github/workflows/ci.yml
-- Automated Pipeline Jobs:
-    1. Code Quality & Linting: Ruff linting and Black code formatting checks.
-    2. Matrix Testing: Python 3.10 and 3.11 parallel execution.
-    3. Automated Unit Testing: Full pytest test suite with code coverage (pytest-cov).
-    4. Quality Gate Pipeline Check: python scripts/run_phase2_pipeline.py --skip-server.
-    5. Kubernetes Manifest Validation: Automated YAML and schema dry-run.
-    6. Docker Container Build: Multi-stage Docker image build verification.
-
-================================================================================
-3. INVENTORY OF ALL CREATED & UPDATED FILES
-================================================================================
-
-Serving & REST API:
--------------------
-1.  src/serving/__init__.py                 [Empty module initializer]
-2.  src/serving/schemas.py                  [Pydantic v2 request/response schemas]
-3.  src/serving/model_loader.py             [ModelStore, canary routing, artifact manifest]
-4.  src/serving/app.py                      [FastAPI server, endpoints, middleware]
-5.  configs/serving_config.yaml             [Serving, canary, and server parameters]
-
-Registry & Quality Monitoring:
-------------------------------
-6.  src/registry/__init__.py                [Empty module initializer]
-7.  src/registry/model_manager.py           [MLflow Registry lifecycle manager]
-8.  src/monitoring/__init__.py              [Empty module initializer]
-9.  src/monitoring/model_tests.py           [Great Expectations data validation suite]
-10. src/monitoring/drift_detection.py       [Evidently AI statistical drift report]
-11. src/monitoring/quality_gates.py         [Pre-promotion risk/quality gates]
-
-Docker & Kubernetes:
---------------------
-12. Dockerfile                              [Multi-stage lean production Docker build]
-13. docker-compose.yml                      [Full stack: API, MLflow, Prometheus, Grafana]
-14. .dockerignore                           [Docker image build ignore rules]
-15. k8s/namespace.yaml                      [Kubernetes questioncraft namespace]
-16. k8s/configmap.yaml                      [Kubernetes ConfigMap configuration]
-17. k8s/deployment.yaml                     [Kubernetes Deployment + Canary track]
-18. k8s/service.yaml                        [Kubernetes NodePort Service]
-19. k8s/hpa.yaml                            [Kubernetes HorizontalPodAutoscaler]
-20. k8s/ingress.yaml                        [Kubernetes Ingress rules]
-
-Observability:
---------------
-21. monitoring/prometheus.yml               [Prometheus scrape targets & intervals]
-22. monitoring/grafana/dashboards/questioncraft.json  [Grafana MLOps dashboard]
-23. monitoring/grafana/provisioning/datasources/datasource.yml [Prometheus datasource]
-24. monitoring/grafana/provisioning/dashboards/dashboard.yml   [Dashboard provider]
-
-Scripts & Testing:
-------------------
-25. scripts/run_phase2_pipeline.py          [Phase 2 production pipeline orchestrator]
-26. scripts/promote_model.py                [Model promotion & rollback CLI]
-27. scripts/seed_demo_artifacts.py          [Seeds mock questions & baseline models]
-28. scripts/demo_for_evaluator.py           [Official live evaluation walkthrough demo]
-29. scripts/test_api_client.py              [FastAPI endpoint integration test client]
-30. tests/test_serving.py                   [12 unit tests for FastAPI serving]
-31. tests/test_model_quality.py             [24 unit tests for gates & drift]
-
-Project Configuration & Documentation:
---------------------------------------
-32. pyproject.toml                          [Updated to v2.0.0 with Phase 2 dependencies]
-33. .github/workflows/ci.yml                [Extended CI/CD workflow]
-34. README.md                               [Updated with Phase 2 architecture & demo]
-35. QUESTIONCRAFT.md                        [Updated with Phase 2 OBE documentation]
-36. questioncraft_ui.html                   [Interactive MLOps Dashboard & Inference UI]
-
-================================================================================
-4. TEST EXECUTION & PIPELINE VERIFICATION RESULTS
-================================================================================
-
-Pytest Full Test Suite Execution (pytest tests/ -v):
-----------------------------------------------------
-  tests/test_feature_engineering.py  [ 5 PASSED ]
-  tests/test_model_quality.py        [ 24 PASSED ]
-  tests/test_models.py               [ 4 PASSED ]
-  tests/test_serving.py              [ 12 PASSED ]
-  tests/test_utils.py                [ 3 PASSED ]
-  -----------------------------------------------
-  TOTAL: 48 PASSED in 73.33s (0 FAILED, 100% PASS RATE)
-
-Pipeline Verification (python scripts/run_phase2_pipeline.py --skip-server):
-----------------------------------------------------------------------------
-  STEP 1: Model Quality Gate Validation  ==> [PASSED] (4/4 gates approved)
-  STEP 2: Data Validation (Great Exp.)   ==> [PASSED] (8/8 data tests passed)
-  STEP 3: Drift Detection (Evidently AI) ==> [PASSED] (Report saved to reports/drift/)
-  STEP 4: ML Artifact Verification       ==> [PASSED] (All 11 artifacts verified)
-  OVERALL STATUS: ALL PHASE 2 CHECKS PASSED — READY FOR DEPLOYMENT!
-
-Live Endpoint Probe Verification (http://localhost:8000):
-----------------------------------------------------------
-  - GET  /health   ==> HTTP 200 OK | status: healthy, 3/3 models loaded
-  - POST /predict  ==> HTTP 200 OK | Difficulty: Hard, Bloom: L6, CT: Algorithmic
-  - GET  /artifacts==> HTTP 200 OK | 11 categories returned in manifest
-
-================================================================================
-5. EVALUATION DEMO GUIDE & COMMAND CHEAT SHEET
-================================================================================
-
-Command 1: Terminal Walkthrough Demo (1-command execution)
----------------------------------------------------------
-$ python scripts/demo_for_evaluator.py
-(Runs data validation, quality gates, live predictions, 11 artifacts table,
-canary routing simulation, and statistical drift checks with clear visual output.)
-
-Command 2: Start the Live Production API Server
------------------------------------------------
-$ python -m uvicorn src.serving.app:app --host 0.0.0.0 --port 8000
-Then open in browser:
-- Swagger Interactive Documentation : http://localhost:8000/docs
-- ReDoc Alternative Documentation  : http://localhost:8000/redoc
-- 11 ML Artifacts Manifest         : http://localhost:8000/artifacts
-- Prometheus Metrics Export        : http://localhost:8000/metrics
-
-Command 3: Model Registry Promotion CLI (Blue-Green Swap & Rollback)
---------------------------------------------------------------------
-$ python scripts/promote_model.py --list
-$ python scripts/promote_model.py --model difficulty --to staging
-$ python scripts/promote_model.py --model difficulty --to production
-$ python scripts/promote_model.py --model difficulty --rollback
-
-Command 4: Docker Compose Full Stack Launch
--------------------------------------------
-$ docker compose up -d
-(Spins up FastAPI on :8000, MLflow UI on :5000, Prometheus on :9090, Grafana on :3000)
-
-================================================================================
-END OF PHASE 2 WORK SUMMARY — QUESTIONCRAFT (RVCE AIML 2026)
-================================================================================
-

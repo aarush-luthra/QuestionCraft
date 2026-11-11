@@ -30,8 +30,6 @@ quality_gates:
 # ── Monitoring ────────────────────────────────────────────────────────────────
 monitoring:
   prometheus_enabled: true
-  drift_check_interval_hours: 24
-  drift_report_dir: "reports/drift"
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 cors:

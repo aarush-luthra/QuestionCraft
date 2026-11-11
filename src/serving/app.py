@@ -27,11 +27,10 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import numpy as np
 import yaml
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import PlainTextResponse
 
 from src.serving.model_loader import ModelStore
 from src.serving.schemas import (
@@ -44,7 +43,6 @@ from src.serving.schemas import (
     DuplicateCheckInput,
     DuplicateResult,
     HealthResponse,
-    ModelInfoResponse,
     QuestionInput,
 )
 
@@ -77,6 +75,7 @@ def _load_serving_config() -> dict:
 
 # ── Lifespan ───────────────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models on startup, cleanup on shutdown."""
@@ -85,7 +84,10 @@ async def lifespan(app: FastAPI):
 
     serving_cfg = _load_serving_config()
     models_dir = serving_cfg.get("models_dir", "models")
-    mlflow_uri = serving_cfg.get("mlflow_tracking_uri", os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"))
+    # Environment wins over the config file, so containers can point at the MLflow server
+    mlflow_uri = os.getenv("MLFLOW_TRACKING_URI") or serving_cfg.get(
+        "mlflow_tracking_uri", "sqlite:///mlflow.db"
+    )
     canary_ratio = serving_cfg.get("canary_ratio", 0.0)
 
     model_store = ModelStore(models_dir=models_dir, mlflow_uri=mlflow_uri)
@@ -123,6 +125,7 @@ app.add_middleware(
 
 # ── Middleware: request metrics ────────────────────────────────────────────────
 
+
 @app.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     start = time.time()
@@ -138,9 +141,10 @@ async def metrics_middleware(request: Request, call_next):
 
 # ── Health & Info Endpoints ────────────────────────────────────────────────────
 
+
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health_check():
-    """Health check endpoint for Kubernetes liveness/readiness probes."""
+    """Health check endpoint (used by the Docker HEALTHCHECK and the CI smoke test)."""
     return HealthResponse(
         status="healthy" if model_store and model_store.is_loaded("difficulty") else "degraded",
         version="2.0.0",
@@ -161,17 +165,56 @@ async def get_artifact_manifest():
 
 @app.get("/models/info", tags=["Registry"])
 async def list_models():
-    """List all loaded model versions and their registry status."""
+    """Serving versions, registry stages and canary state for every model."""
     if not model_store:
         raise HTTPException(status_code=503, detail="Models not loaded")
     return {
         "models": model_store.model_versions,
+        "canary_models": model_store.canary_versions,
         "canary_ratio": model_store._canary_ratio,
+        "registry_stages": _registry_stages(),
         "status": model_store.get_all_status(),
     }
 
 
+@app.post("/models/reload", tags=["Registry"])
+async def reload_models():
+    """Reload models from the registry after a promotion or rollback (blue-green swap)."""
+    if not model_store:
+        raise HTTPException(status_code=503, detail="Models not loaded")
+    before = model_store.model_versions
+    model_store.reload()
+    return {
+        "before": before,
+        "after": model_store.model_versions,
+        "canary_models": model_store.canary_versions,
+        "canary_ratio": model_store._canary_ratio,
+    }
+
+
+def _registry_stages() -> dict:
+    """{model_key: {version: stage}} for versions not in stage None; {} if MLflow is unreachable."""
+    if not model_store or not model_store.mlflow_uri:
+        return {}
+    try:
+        from src.registry.model_manager import REGISTRY_MODELS, ModelRegistryManager
+
+        client = ModelRegistryManager(model_store.mlflow_uri).client
+        out = {}
+        for key, name in REGISTRY_MODELS.items():
+            try:
+                vs = client.search_model_versions(f"name='{name}'")
+            except Exception:
+                continue
+            out[key] = {str(v.version): v.current_stage for v in vs if v.current_stage != "None"}
+        return out
+    except Exception as e:  # pragma: no cover - environment dependent
+        logger.warning("Registry stages unavailable: %s", e)
+        return {}
+
+
 # ── Prometheus Metrics Endpoint ────────────────────────────────────────────────
+
 
 @app.get("/metrics", tags=["Monitoring"])
 async def prometheus_metrics():
@@ -183,41 +226,51 @@ async def prometheus_metrics():
     for endpoint, count in _request_count.items():
         lines.append(f'questioncraft_requests_total{{endpoint="{endpoint}"}} {count}')
 
-    lines.extend([
-        "# HELP questioncraft_request_latency_seconds_total Total request latency per endpoint",
-        "# TYPE questioncraft_request_latency_seconds_total counter",
-    ])
+    lines.extend(
+        [
+            "# HELP questioncraft_request_latency_seconds_total Total request latency per endpoint",
+            "# TYPE questioncraft_request_latency_seconds_total counter",
+        ]
+    )
     for endpoint, total_latency in _request_latency_sum.items():
         lines.append(
             f'questioncraft_request_latency_seconds_total{{endpoint="{endpoint}"}} {total_latency:.6f}'
         )
 
-    lines.extend([
-        "# HELP questioncraft_predictions_total Total predictions per model type",
-        "# TYPE questioncraft_predictions_total counter",
-    ])
+    lines.extend(
+        [
+            "# HELP questioncraft_predictions_total Total predictions per model type",
+            "# TYPE questioncraft_predictions_total counter",
+        ]
+    )
     for model_type, count in _prediction_count.items():
         lines.append(f'questioncraft_predictions_total{{model="{model_type}"}} {count}')
 
-    lines.extend([
-        "# HELP questioncraft_models_loaded Whether each model is loaded (1=yes, 0=no)",
-        "# TYPE questioncraft_models_loaded gauge",
-    ])
+    lines.extend(
+        [
+            "# HELP questioncraft_models_loaded Whether each model is loaded (1=yes, 0=no)",
+            "# TYPE questioncraft_models_loaded gauge",
+        ]
+    )
     if model_store:
         for name, loaded in model_store.get_all_status().items():
             lines.append(f'questioncraft_models_loaded{{model="{name}"}} {1 if loaded else 0}')
 
     uptime = time.time() - _start_time
-    lines.extend([
-        "# HELP questioncraft_uptime_seconds Server uptime in seconds",
-        "# TYPE questioncraft_uptime_seconds gauge",
-        f"questioncraft_uptime_seconds {uptime:.2f}",
-    ])
+    lines.extend(
+        [
+            "# HELP questioncraft_uptime_seconds Server uptime in seconds",
+            "# TYPE questioncraft_uptime_seconds gauge",
+            f"questioncraft_uptime_seconds {uptime:.2f}",
+        ]
+    )
 
-    return JSONResponse(content="\n".join(lines) + "\n", media_type="text/plain")
+    # Prometheus text exposition format (must be plain text, not a JSON-encoded string)
+    return PlainTextResponse("\n".join(lines) + "\n", media_type="text/plain; version=0.0.4")
 
 
 # ── Classification Endpoints ──────────────────────────────────────────────────
+
 
 def _classify_single(question_text: str) -> ClassificationResult:
     """Run all classifiers on a single question."""
@@ -268,11 +321,18 @@ def _classify_single(question_text: str) -> ClassificationResult:
     ct_model = model_store.get_model("ct")
     if ct_model:
         try:
-            clf = ct_model["pipeline"] if isinstance(ct_model, dict) and "pipeline" in ct_model else ct_model
+            clf = (
+                ct_model["pipeline"]
+                if isinstance(ct_model, dict) and "pipeline" in ct_model
+                else ct_model
+            )
             pred = clf.predict([question_text])[0]
             ct_labels = [
-                "Decomposition", "Pattern Recognition", "Abstraction",
-                "Algorithmic Thinking", "Evaluation & Debugging",
+                "Decomposition",
+                "Pattern Recognition",
+                "Abstraction",
+                "Algorithmic Thinking",
+                "Evaluation & Debugging",
             ]
             if hasattr(pred, "__iter__") and not isinstance(pred, str):
                 # Multi-label binary output
@@ -318,6 +378,7 @@ async def classify_batch(body: BatchQuestionInput):
 
 # ── Duplicate Detection ───────────────────────────────────────────────────────
 
+
 @app.post("/dedup", response_model=DuplicateResult, tags=["Deduplication"])
 async def check_duplicate(body: DuplicateCheckInput):
     """Check if two questions are semantic duplicates."""
@@ -355,12 +416,14 @@ async def check_batch_duplicates(body: BatchDuplicateInput):
         for i in range(n):
             for j in range(i + 1, n):
                 sim = float(sim_matrix[i][j])
-                pairs.append(DuplicateResult(
-                    question_a=body.questions[i],
-                    question_b=body.questions[j],
-                    cosine_similarity=round(sim, 4),
-                    is_duplicate=sim >= body.threshold,
-                ))
+                pairs.append(
+                    DuplicateResult(
+                        question_a=body.questions[i],
+                        question_b=body.questions[j],
+                        cosine_similarity=round(sim, 4),
+                        is_duplicate=sim >= body.threshold,
+                    )
+                )
 
         return BatchDuplicateResult(
             pairs=pairs,
@@ -373,11 +436,12 @@ async def check_batch_duplicates(body: BatchDuplicateInput):
 
 # ── Deployment Strategy Endpoints ──────────────────────────────────────────────
 
+
 @app.post("/deploy/canary", tags=["Deployment"])
 async def set_canary_ratio(ratio: float = 0.1):
     """
     Set canary traffic ratio for Blue-Green/Canary deployment strategy.
-    
+
     - ratio=0.0: All traffic goes to Production model (Blue-Green stable)
     - ratio=0.1: 10% traffic goes to Staging model (Canary release)
     - ratio=1.0: All traffic goes to Staging model (full cutover)
@@ -387,7 +451,11 @@ async def set_canary_ratio(ratio: float = 0.1):
     model_store.set_canary_ratio(ratio)
     return {
         "message": f"Canary ratio set to {ratio * 100:.1f}%",
-        "strategy": "canary" if 0 < ratio < 1 else ("blue-green-cutover" if ratio == 1 else "production-only"),
+        "strategy": (
+            "canary"
+            if 0 < ratio < 1
+            else ("blue-green-cutover" if ratio == 1 else "production-only")
+        ),
     }
 
 
@@ -396,17 +464,17 @@ async def deployment_status():
     """Get current deployment strategy status."""
     if not model_store:
         raise HTTPException(status_code=503, detail="Models not loaded")
-    
+
     canary_ratio = model_store._canary_ratio
     has_canary = bool(model_store._canary_models)
-    
+
     if canary_ratio == 0:
         strategy = "production-only"
     elif canary_ratio == 1:
         strategy = "blue-green-cutover"
     else:
         strategy = f"canary-{canary_ratio*100:.0f}pct"
-    
+
     return {
         "active_strategy": strategy,
         "canary_ratio": canary_ratio,

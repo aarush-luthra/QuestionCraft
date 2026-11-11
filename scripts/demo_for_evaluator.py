@@ -7,12 +7,10 @@ Demonstrates:
   2. Live Question Classification & Semantic Deduplication
   3. The 11 ML Artifacts Manifest (Accreditation & Auditability)
   4. Blue-Green & Canary Deployment Strategies with Rollback (Unit IV)
-  5. Statistical Data Drift Monitoring (Unit V)
 """
 
 from __future__ import annotations
 
-import json
 import sys
 import time
 from pathlib import Path
@@ -21,8 +19,17 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import joblib
 import pandas as pd
+
+
+def _demo_versions() -> tuple[str, str]:
+    """Newest TF-IDF+LR baseline (Production) and newest XGBoost challenger (Staging)."""
+    from src.registry.model_manager import ModelRegistryManager
+
+    return ModelRegistryManager().demo_versions("difficulty")
+
+
+PRODUCTION_VERSION, STAGING_VERSION = _demo_versions()
 
 
 def print_header(title: str, subtitle: str = ""):
@@ -34,44 +41,74 @@ def print_header(title: str, subtitle: str = ""):
 
 
 def demo_step_1_quality_gates():
-    print_header("Step 1: Model Risk, Quality Gates & Data Validation", "RVCE AI254TA Unit III: Quality Assurance & Reproducibility")
-    from src.monitoring.quality_gates import run_full_quality_check
-    from src.monitoring.model_tests import validate_difficulty_dataset
+    print_header(
+        "Step 1: Model Risk, Quality Gates & Data Validation",
+        "RVCE AI254TA Unit III: Quality Assurance & Reproducibility",
+    )
+    from src.monitoring.model_tests import clean_text_dataset, validate_difficulty_dataset
+    from src.registry.model_manager import ModelRegistryManager
 
-    print("\n[+] Running Great Expectations-style Data Validation on Processed Questions...")
-    df = pd.read_parquet("data/processed/difficulty_dataset.parquet")
-    val_res = validate_difficulty_dataset(df)
-    print(f"    - Total Validation Checks: {val_res['total_tests']}")
-    print(f"    - Passed: {val_res['passed']} | Failed: {val_res['failed']}")
-    for d in val_res['details']:
-        status = "PASSED" if d['passed'] else "FAILED"
-        print(f"      * [{status}] {d['test']}: {d['message']}")
+    print("\n[+] Rule-based data validation on the RAW processed dataset...")
+    raw = pd.read_parquet("data/processed/difficulty_dataset.parquet")
+    raw_res = validate_difficulty_dataset(raw)
+    print(
+        f"    - Raw rows: {len(raw):,} | Checks passed: {raw_res['passed']}/{raw_res['total_tests']}"
+    )
+    for d in raw_res["details"]:
+        if not d["passed"]:
+            print(f"      * [FAILED] {d['test']}: {d['message']}")
 
-    print("\n[+] Enforcing Pre-Promotion Model Quality Gates...")
-    metrics = {
-        "test_accuracy": 0.9705,
-        "test_f1_macro": 0.9492,
-        "cv_f1_macro_std": 0.003,
-        "test_size_n": 23744,
-    }
-    gate_res = run_full_quality_check(metrics)
+    print("\n[+] Remediation: removing short texts, conflicting labels and exact duplicates...")
+    clean, report = clean_text_dataset(raw, "question_text", "difficulty")
+    print(
+        f"    - {report['rows_before']:,} -> {report['rows_after']:,} rows  "
+        f"(short: {report['removed_too_short']}, conflicting-label texts: "
+        f"{report['removed_conflicting_label_texts']}, duplicates: {report['removed_duplicates']:,})"
+    )
+    clean_res = validate_difficulty_dataset(clean)
+    print(
+        f"    - Re-validation on cleaned data: {clean_res['passed']}/{clean_res['total_tests']} checks passed"
+    )
+
+    print("\n[+] Enforcing all 6 pre-promotion quality gates (real MLflow metrics)...")
+    manager = ModelRegistryManager()
+    manager.set_demo_state("difficulty", production=PRODUCTION_VERSION, staging=STAGING_VERSION)
+    gate_res = manager.evaluate_promotion("difficulty")
+    print(
+        f"    - Candidate: v{gate_res['candidate_version']} (Staging, XGBoost) vs "
+        f"Production: v{gate_res['production_version']} (Logistic Regression)"
+    )
     print(f"    - Gates Passed: {gate_res['passed']}/{gate_res['total_gates']}")
-    for g in gate_res['details']:
-        print(f"      * [PASS] Gate '{g['gate']}': {g['message']}")
-    print(f"\n    ==> Model Promotion Gate Decision: {'APPROVED (Eligible for Staging/Production)' if gate_res['promotion_allowed'] else 'BLOCKED'}")
+    for g in gate_res["details"]:
+        print(f"      * [{'PASS' if g['passed'] else 'FAIL'}] {g['gate']}: {g['message']}")
+    m = gate_res["candidate_metrics"]
+    if "rvce_accuracy" in m:
+        print("\n[+] Domain-shift check on real RVCE papers (held out, never trained on):")
+        print(
+            f"    - Accuracy {m['rvce_accuracy']:.3f} vs majority-class baseline "
+            f"{m.get('rvce_majority_baseline_accuracy', float('nan')):.3f} (n={int(m.get('rvce_n', 0))})"
+        )
+        print("    - Labels: LLM drafts pending faculty review -> reported, not gated")
+    print(
+        f"\n    ==> Model Promotion Gate Decision: "
+        f"{'APPROVED (eligible for Production)' if gate_res['promotion_allowed'] else 'BLOCKED'}"
+    )
 
 
 def demo_step_2_live_inference():
-    print_header("Step 2: Live Multi-Dimensional Question Classification", "Production ML Inference (Difficulty + Bloom's + CT Skills)")
+    print_header(
+        "Step 2: Live Multi-Dimensional Question Classification",
+        "Production ML Inference (Difficulty + Bloom's + CT Skills)",
+    )
     from src.serving.model_loader import ModelStore
 
     store = ModelStore(models_dir="models")
     store.load_all()
 
     test_questions = [
-        "What is the definition of a binary search tree and state its properties?",
-        "Apply Dijkstra algorithm to compute shortest paths in a directed weighted graph.",
-        "Design and implement a cache-aware B-Tree in C++ for large-scale persistent storage.",
+        "Define a binary search tree and state its properties.",
+        "Apply Dijkstra's algorithm to find the shortest path from A to all nodes in the given graph.",
+        "Evaluate the trade-offs between adjacency matrix and adjacency list for sparse graphs.",
     ]
 
     diff_model = store.get_model("difficulty")
@@ -80,25 +117,34 @@ def demo_step_2_live_inference():
     ct_pipe = ct_raw["pipeline"] if isinstance(ct_raw, dict) else ct_raw
 
     ct_labels = [
-        "Decomposition", "Pattern Recognition", "Abstraction",
-        "Algorithmic Thinking", "Evaluation & Debugging",
+        "Decomposition",
+        "Pattern Recognition",
+        "Abstraction",
+        "Algorithmic Thinking",
+        "Evaluation & Debugging",
     ]
 
     for i, q in enumerate(test_questions, 1):
         diff = diff_model.predict([q])[0]
         blooms = blooms_model.predict([q])[0]
         ct_pred = ct_pipe.predict([q])[0]
-        ct_active = [ct_labels[idx] for idx, val in enumerate(ct_pred) if val == 1] or ["Algorithmic Thinking"]
+        ct_active = [ct_labels[idx] for idx, val in enumerate(ct_pred) if val == 1] or [
+            "(none detected)"
+        ]
 
-        print(f"\n  [Question {i}]: \"{q}\"")
+        print(f'\n  [Question {i}]: "{q}"')
         print(f"    * Predicted Difficulty : \033[1;32m{diff}\033[0m")
         print(f"    * Bloom's Taxonomy     : \033[1;34m{blooms}\033[0m")
         print(f"    * CT Skills Detected   : \033[1;35m{', '.join(ct_active)}\033[0m")
 
 
 def demo_step_3_artifacts_manifest():
-    print_header("Step 3: Complete ML Artifacts Tracking", "RVCE AI254TA: 11 Standard ML Artifact Categories")
+    print_header(
+        "Step 3: Complete ML Artifacts Tracking",
+        "RVCE AI254TA: 11 Standard ML Artifact Categories (verified)",
+    )
     from src.serving.model_loader import ModelStore
+
     store = ModelStore(models_dir="models")
     store.load_all()
     manifest = store.get_artifact_manifest()
@@ -111,58 +157,70 @@ def demo_step_3_artifacts_manifest():
 
 
 def demo_step_4_deployment_strategies():
-    print_header("Step 4: Blue-Green & Canary Deployment Strategies", "RVCE AI254TA Unit IV: Model Promotion & Traffic Routing")
+    print_header(
+        "Step 4: Blue-Green & Canary Deployment Strategies",
+        "RVCE AI254TA Unit IV: Model Promotion & Traffic Routing",
+    )
+    from collections import Counter
 
-    print("\n[+] 1. CANARY TRAFFIC ROUTING:")
-    from src.serving.model_loader import ModelStore
-    store = ModelStore(models_dir="models")
-    store.load_all()
-    
-    # Simulate Canary
-    store.set_canary_ratio(0.10)
-    print("    - Current Canary Traffic Ratio : 10% to Staging candidate, 90% to Production baseline")
-    print("    - Production Model Version     : v1.0.0 (Logistic Regression baseline)")
-    print("    - Staging Canary Model Version : v1.1.0 (Candidate model with updated weights)")
-    print("    - Kubernetes Canary Track      : 1 replica canary pod vs 3 replicas stable pods")
+    from fastapi.testclient import TestClient
 
-    print("\n[+] 2. BLUE-GREEN ZERO-DOWNTIME SWAP:")
-    print("    - Command: python scripts/promote_model.py --model difficulty --to production")
-    print("    - Action : Version v1.0.0 (Green) transitioned to 'Archived'")
-    print("    - Action : Version v1.1.0 (Blue) transitioned to 'Production'")
-    print("    - Traffic: Instant 100% cutover with zero request drops")
+    import src.serving.app as serving
+    from src.registry.model_manager import ModelRegistryManager
 
-    print("\n[+] 3. INSTANT DISASTER ROLLBACK:")
-    print("    - Command: python scripts/promote_model.py --model difficulty --rollback")
-    print("    - Action : Version v1.1.0 archived; Version v1.0.0 restored to 'Production'")
-    print("    - Time to restore: < 100ms")
+    manager = ModelRegistryManager()
+    manager.set_demo_state("difficulty", production=PRODUCTION_VERSION, staging=STAGING_VERSION)
 
+    def show_info(api, label):
+        info = api.get("/models/info").json()
+        print(f"    GET /models/info  [{label}]")
+        print(
+            f"      serving   : difficulty={info['models'].get('difficulty')}  canary={info['canary_models'].get('difficulty')}"
+            f"  ratio={info['canary_ratio']:.0%}"
+        )
+        print(f"      registry  : difficulty stages={info['registry_stages'].get('difficulty')}")
 
-def demo_step_5_drift_monitoring():
-    print_header("Step 5: Evidently AI Statistical Drift Monitoring", "RVCE AI254TA Unit V: Observability & Continuous Monitoring")
-    from src.monitoring.drift_detection import DriftReport
-    import numpy as np
+    # The real FastAPI app, in-process (same code path as `uvicorn src.serving.app:app`)
+    with TestClient(serving.app) as api:
+        print(
+            f"\n[+] 0. START: v{PRODUCTION_VERSION} (LR) in Production, v{STAGING_VERSION} (XGBoost) in Staging"
+        )
+        show_info(api, "baseline")
 
-    np.random.seed(42)
-    n = 300
-    ref = pd.DataFrame({
-        "word_count": np.random.normal(25, 6, n),
-        "flesch_reading_ease": np.random.normal(55, 12, n),
-    })
-    # Shifted distribution
-    cur = pd.DataFrame({
-        "word_count": np.random.normal(38, 7, n),  # Significant drift
-        "flesch_reading_ease": np.random.normal(54, 12, n),
-    })
+        print("\n[+] 1. CANARY at 10%:  POST /deploy/canary?ratio=0.1")
+        api.post("/deploy/canary", params={"ratio": 0.1})
+        show_info(api, "canary 10%")
+        served = Counter(serving.model_store.route("difficulty")[1] for _ in range(1000))
+        print(
+            "      1,000 routed requests -> "
+            + ", ".join(f"{k}: {v / 10:.1f}%" for k, v in sorted(served.items()))
+        )
 
-    report = DriftReport(ref)
-    res = report.run(cur)
+        print("\n[+] 2. BLUE-GREEN PROMOTION: quality gates -> promote -> POST /models/reload")
+        gates = manager.evaluate_promotion("difficulty")
+        print(
+            f"      gates {gates['passed']}/{gates['total_gates']} passed -> {'APPROVED' if gates['promotion_allowed'] else 'BLOCKED'}"
+        )
+        if gates["promotion_allowed"]:
+            manager.promote_to_production(
+                "difficulty", version=STAGING_VERSION, archive_existing=True
+            )
+            api.post("/deploy/canary", params={"ratio": 0.0})
+            api.post("/models/reload")
+            show_info(api, "after promotion")
 
-    print("\n[+] Statistical Drift Test Summary:")
-    print(f"    - Reference Samples: {res['reference_size']} | Current Production Samples: {res['current_size']}")
-    print(f"    - Overall Drift Status: {'DRIFT DETECTED (Alert Triggered)' if res['overall_drift_detected'] else 'Stable'}")
-    for col, d in res['feature_drift'].items():
-        status = "DRIFT DETECTED" if d['drift_detected'] else "STABLE"
-        print(f"    * Feature '{col}': [{status}] (p-value={d['p_value']}, statistic={d['statistic']})")
+        print("\n[+] 3. ROLLBACK: promote_model.py --rollback -> POST /models/reload")
+        t0 = time.perf_counter()
+        rb = manager.rollback("difficulty")
+        api.post("/models/reload")
+        ms = (time.perf_counter() - t0) * 1000
+        print(
+            f"      rolled back to v{rb.get('rolled_back_to_version')} and reloaded in {ms:.0f} ms (measured)"
+        )
+        show_info(api, "after rollback")
+
+    manager.set_demo_state("difficulty", production=PRODUCTION_VERSION, staging=STAGING_VERSION)
+    print("\n    (Registry reset to baseline so the demo can be re-run)")
 
 
 def main():
@@ -175,7 +233,6 @@ def main():
     demo_step_2_live_inference()
     demo_step_3_artifacts_manifest()
     demo_step_4_deployment_strategies()
-    demo_step_5_drift_monitoring()
 
     print("\n" + "=" * 75)
     print("  [SUCCESS] All Phase 2 Demonstration Modules Executed Successfully!")
@@ -184,4 +241,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

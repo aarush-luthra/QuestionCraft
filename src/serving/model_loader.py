@@ -23,7 +23,7 @@ logger = logging.getLogger("questioncraft.serving.model_loader")
 class ModelStore:
     """
     Central model store that loads and manages all QuestionCraft models.
-    
+
     Supports:
     - Local .pkl file loading (default, always works)
     - MLflow Model Registry loading (production deployment)
@@ -37,12 +37,27 @@ class ModelStore:
         self._models: dict[str, Any] = {}
         self._model_versions: dict[str, str] = {}
         self._canary_models: dict[str, Any] = {}  # staging/canary versions
+        self._canary_versions: dict[str, str] = {}
         self._canary_ratio: float = 0.0  # 0.0 = all production, 1.0 = all canary
         self._load_time: float = 0.0
 
     @property
     def load_time(self) -> float:
         return self._load_time
+
+    @property
+    def canary_versions(self) -> dict[str, str]:
+        return dict(self._canary_versions)
+
+    def route(self, name: str) -> tuple[Any, str]:
+        """Like get_model(), but also returns the version string that served the request."""
+        if (
+            self._canary_ratio > 0.0
+            and name in self._canary_models
+            and np.random.random() < self._canary_ratio
+        ):
+            return self._canary_models[name], self._canary_versions.get(name, "canary")
+        return self._models.get(name), self._model_versions.get(name, "unknown")
 
     @property
     def model_versions(self) -> dict[str, str]:
@@ -80,10 +95,23 @@ class ModelStore:
             list(self._models.keys()),
         )
 
+    @staticmethod
+    def _load_registry_model(mlflow, uri: str):
+        """Load a registered sklearn pipeline (same interface as the local .pkl files)."""
+        # Models trained via `python -m ...` were pickled under ``__main__``;
+        # expose the custom estimator there so they can be unpickled here.
+        import __main__
+        from src.models.difficulty_classifier import LabelEncodedXGBClassifier
+
+        if not hasattr(__main__, "LabelEncodedXGBClassifier"):
+            __main__.LabelEncodedXGBClassifier = LabelEncodedXGBClassifier
+        return mlflow.sklearn.load_model(uri)
+
     def _load_from_registry(self) -> None:
         """Attempt to load production-stage models from MLflow Model Registry."""
         try:
             import mlflow
+            import mlflow.sklearn
 
             mlflow.set_tracking_uri(self.mlflow_uri)
             registry_models = {
@@ -100,21 +128,28 @@ class ModelStore:
                     if versions:
                         version = versions[0]
                         model_uri = f"models:/{model_name}/Production"
-                        self._models[key] = mlflow.pyfunc.load_model(model_uri)
+                        self._models[key] = self._load_registry_model(mlflow, model_uri)
                         self._model_versions[key] = f"registry-v{version.version}-Production"
                         logger.info(
                             "Loaded '%s' from registry: %s v%s (Production)",
-                            key, model_name, version.version,
+                            key,
+                            model_name,
+                            version.version,
                         )
 
                     # Also check for staging version (for canary deployment)
                     staging_versions = client.get_latest_versions(model_name, stages=["Staging"])
                     if staging_versions:
                         staging_uri = f"models:/{model_name}/Staging"
-                        self._canary_models[key] = mlflow.pyfunc.load_model(staging_uri)
+                        self._canary_models[key] = self._load_registry_model(mlflow, staging_uri)
+                        self._canary_versions[key] = (
+                            f"registry-v{staging_versions[0].version}-Staging"
+                        )
                         logger.info(
                             "Loaded canary '%s' from registry: %s v%s (Staging)",
-                            key, model_name, staging_versions[0].version,
+                            key,
+                            model_name,
+                            staging_versions[0].version,
                         )
                 except Exception as e:
                     logger.debug("Registry model '%s' not available: %s", model_name, e)
@@ -124,6 +159,18 @@ class ModelStore:
         except Exception as e:
             logger.warning("Could not connect to MLflow registry: %s", e)
 
+    def reload(self) -> None:
+        """Re-read models (local + registry Production/Staging), e.g. after a promotion or rollback.
+
+        The canary ratio is kept; if the registry no longer has a Staging version the canary
+        routes nothing, because there is no canary model to route to.
+        """
+        self._models.clear()
+        self._model_versions.clear()
+        self._canary_models.clear()
+        self._canary_versions.clear()
+        self.load_all()
+
     def set_canary_ratio(self, ratio: float) -> None:
         """Set canary traffic ratio (0.0 = all production, 1.0 = all canary/staging)."""
         self._canary_ratio = max(0.0, min(1.0, ratio))
@@ -132,7 +179,7 @@ class ModelStore:
     def get_model(self, name: str) -> Any:
         """
         Get a model by name, respecting canary routing.
-        
+
         If canary is configured and a staging model exists, routes
         traffic based on the configured canary ratio.
         """
@@ -149,23 +196,16 @@ class ModelStore:
         return name in self._models
 
     def get_all_status(self) -> dict[str, bool]:
-        return {
-            name: name in self._models
-            for name in ["difficulty", "blooms", "ct"]
-        }
+        return {name: name in self._models for name in ["difficulty", "blooms", "ct"]}
 
     def get_artifact_manifest(self) -> dict:
-        """Return complete ML artifact manifest as required by RVCE evaluation."""
-        return {
-            "dataset": "data/processed/ (DVC-versioned Parquet files: difficulty_dataset, blooms_dataset, ct_dataset)",
-            "preprocessing_pipeline": "src/data/preprocess.py (normalization, feature extraction, label encoding)",
-            "trained_model": f"models/ directory — loaded models: {list(self._models.keys())}",
-            "model_configuration": "configs/model_config.yaml (pinned hyperparameters, TF-IDF settings, thresholds)",
-            "evaluation_results": "MLflow experiments (accuracy, F1-macro, precision, recall, CV scores)",
-            "training_logs": "MLflow tracking URI: " + (self.mlflow_uri or "sqlite:///mlflow.db"),
-            "feature_engineering_artifacts": "src/data/feature_engineering.py (48 features: readability, POS, Bloom verbs, CT keywords)",
-            "tokenizer": "TF-IDF vectorizer (max_features=20000, ngram_range=(1,2), sublinear_tf=True)",
-            "model_metadata": f"Model versions: {self._model_versions}",
-            "deployment_artifacts": "Dockerfile, docker-compose.yml, k8s/ manifests, configs/serving_config.yaml",
-            "monitoring_artifacts": "Evidently AI reports, Prometheus metrics, Grafana dashboards",
-        }
+        """The 11 ML artifact categories (Phase 2 scope, Section 7) with their locations."""
+        from src.registry.artifacts import ARTIFACTS
+
+        manifest = {a.key: a.location for a in ARTIFACTS}
+        manifest["trained_model"] += f" — loaded: {list(self._models.keys())}"
+        manifest["model_metadata"] += f" — serving versions: {self._model_versions}"
+        manifest["training_logs"] += " — tracking URI: " + (
+            self.mlflow_uri or "sqlite:///mlflow.db"
+        )
+        return manifest

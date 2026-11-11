@@ -8,8 +8,6 @@
 #   - grafana:             Monitoring dashboards (port 3000)
 # =============================================================================
 
-version: "3.9"
-
 services:
   # ── QuestionCraft FastAPI Inference Service ─────────────────────────────────
   questioncraft-api:
@@ -21,37 +19,46 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - MLFLOW_TRACKING_URI=sqlite:///mlflow.db
+      # Single writer: all registry reads/writes go through the MLflow server container.
+      # (Host CLI while the stack runs: MLFLOW_TRACKING_URI=http://localhost:5001)
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
       - PYTHONPATH=/app
       - LOG_LEVEL=INFO
     volumes:
       - ./models:/app/models:ro
       - ./configs:/app/configs:ro
-      - mlflow-data:/app/mlflow
+      # Model artifacts are recorded with absolute host paths, so mlruns/ is mounted at the
+      # same absolute path. Writable: MLflow writes registered_model_meta when loading.
+      - ./mlruns:${PWD}/mlruns
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
+    depends_on:
+      - mlflow-server
     restart: unless-stopped
     networks:
       - questioncraft-net
 
   # ── MLflow Tracking Server ─────────────────────────────────────────────────
   mlflow-server:
-    image: ghcr.io/mlflow/mlflow:v2.13.0
+    image: ghcr.io/mlflow/mlflow:v3.17.0
     container_name: questioncraft-mlflow
     ports:
-      - "5000:5000"
+      # macOS AirPlay Receiver holds port 5000: run with MLFLOW_HOST_PORT=5001 there
+      - "${MLFLOW_HOST_PORT:-5000}:5000"
+    # Same registry as the API and the host CLI (scripts/promote_model.py)
     command: >
       mlflow server
       --host 0.0.0.0
       --port 5000
-      --backend-store-uri sqlite:///mlflow/mlflow.db
-      --default-artifact-root /mlflow/artifacts
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --allowed-hosts "mlflow-server:5000,localhost:*,127.0.0.1:*"
     volumes:
-      - mlflow-data:/mlflow
+      - ./mlflow.db:/mlflow/mlflow.db
+      - ./mlruns:${PWD}/mlruns   # writable: MLflow writes registered_model_meta on load
     networks:
       - questioncraft-net
 
@@ -75,7 +82,7 @@ services:
     image: grafana/grafana:10.4.2
     container_name: questioncraft-grafana
     ports:
-      - "3000:3000"
+      - "${GRAFANA_HOST_PORT:-3000}:3000"
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=questioncraft
@@ -90,7 +97,6 @@ services:
       - questioncraft-net
 
 volumes:
-  mlflow-data:
   prometheus-data:
   grafana-data:
 

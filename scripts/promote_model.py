@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import json
 import logging
-
+import os
 import sys
 from pathlib import Path
 
@@ -44,7 +44,19 @@ logger = logging.getLogger("promote_model")
 @click.option("--rollback", is_flag=True, help="Rollback to previous production version")
 @click.option("--list", "list_models", is_flag=True, help="List all registered models")
 @click.option("--compare", nargs=2, type=str, help="Compare two versions: --compare v1 v2")
-@click.option("--tracking-uri", default="sqlite:///mlflow.db", help="MLflow tracking URI")
+@click.option(
+    "--sync-tags",
+    is_flag=True,
+    help="Copy run metadata (data hash, metrics) onto every registry version",
+)
+@click.option(
+    "--skip-gates", is_flag=True, help="Promote to Production without running quality gates"
+)
+@click.option(
+    "--tracking-uri",
+    default=lambda: os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db"),
+    help="MLflow tracking URI (env MLFLOW_TRACKING_URI; use http://localhost:5001 while the Compose stack runs)",
+)
 def main(
     model: str | None,
     stage: str | None,
@@ -52,11 +64,17 @@ def main(
     rollback: bool,
     list_models: bool,
     compare: tuple[str, str] | None,
+    sync_tags: bool,
+    skip_gates: bool,
     tracking_uri: str,
 ) -> None:
     from src.registry.model_manager import ModelRegistryManager
 
     manager = ModelRegistryManager(tracking_uri=tracking_uri)
+
+    if sync_tags:
+        logger.info("Tagged %d registry versions", manager.sync_tags())
+        return
 
     if list_models:
         logger.info("Registered models:")
@@ -85,10 +103,24 @@ def main(
         raise SystemExit(1)
 
     if stage == "staging":
-        # Run quality gates before staging promotion
-        logger.info("Running quality gates before promoting '%s' to Staging...", model)
+        logger.info("Promoting '%s' to Staging...", model)
         result = manager.promote_to_staging(model, version=version)
     else:
+        if not skip_gates:
+            logger.info("Running all quality gates for '%s' before Production promotion...", model)
+            gate_result = manager.evaluate_promotion(model, version=version)
+            if "error" in gate_result:
+                print(json.dumps(gate_result, indent=2))
+                raise SystemExit(1)
+            for g in gate_result["details"]:
+                logger.info(
+                    "  [%s] %s: %s", "PASS" if g["passed"] else "FAIL", g["gate"], g["message"]
+                )
+            if not gate_result["promotion_allowed"]:
+                logger.error(
+                    "Quality gates FAILED — promotion BLOCKED (use --skip-gates to override)"
+                )
+                raise SystemExit(1)
         # Production promotion with Blue-Green swap
         logger.info("Promoting '%s' to Production (Blue-Green swap)...", model)
         result = manager.promote_to_production(model, version=version, archive_existing=True)
@@ -98,4 +130,3 @@ def main(
 
 if __name__ == "__main__":
     main()
-

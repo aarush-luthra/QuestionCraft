@@ -20,7 +20,6 @@ import argparse
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 
 def run_stage(name: str, command: list[str]) -> bool:
@@ -59,18 +58,70 @@ def main():
 
     stages = {
         "download": [
-            ("Download Benchmark Datasets", [py, "-m", "src.data.download", "--config", args.config]),
+            (
+                "Download Benchmark Datasets",
+                [py, "-m", "src.data.download", "--config", args.config],
+            ),
         ],
         "preprocess": [
-            ("Preprocess & Feature Extraction", [py, "-m", "src.data.preprocess", "--config", args.config]),
+            (
+                "Preprocess & Feature Extraction",
+                [py, "-m", "src.data.preprocess", "--config", args.config],
+            ),
         ],
         "train": [
-            ("Train Difficulty Classifier", [py, "-m", "src.models.difficulty_classifier", "--config", args.config, "--model-out", "models/difficulty_classifier.pkl"]),
-            ("Train Bloom's Taxonomy Classifier", [py, "-m", "src.models.blooms_classifier", "--config", args.config, "--model-out", "models/blooms_classifier.pkl"]),
-            ("Train CT Classifier", [py, "-m", "src.models.ct_classifier", "--config", args.config, "--model-out", "models/ct_classifier.pkl"]),
+            (
+                "Train Difficulty Classifier",
+                [
+                    py,
+                    "-m",
+                    "src.models.difficulty_classifier",
+                    "--config",
+                    args.config,
+                    "--model-out",
+                    "models/difficulty_classifier.pkl",
+                ],
+            ),
+            (
+                "Train Bloom's Taxonomy Classifier",
+                [
+                    py,
+                    "-m",
+                    "src.models.blooms_classifier",
+                    "--config",
+                    args.config,
+                    "--model-out",
+                    "models/blooms_classifier.pkl",
+                ],
+            ),
+            (
+                "Train CT Classifier",
+                [
+                    py,
+                    "-m",
+                    "src.models.ct_classifier",
+                    "--config",
+                    args.config,
+                    "--model-out",
+                    "models/ct_classifier.pkl",
+                ],
+            ),
         ],
         "dedup": [
-            ("Semantic Duplicate Detection", [py, "-m", "src.models.duplicate_detector", "--config", args.config, "--input", "data/raw/rvce/question_bank.json", "--out-dir", "models"]),
+            (
+                "Semantic Duplicate Detection",
+                [
+                    py,
+                    "-m",
+                    "src.models.duplicate_detector",
+                    "--config",
+                    args.config,
+                    "--input",
+                    "data/raw/rvce/question_bank.json",
+                    "--out-dir",
+                    "models",
+                ],
+            ),
         ],
     }
 
@@ -94,7 +145,9 @@ def main():
 
     total_elapsed = time.time() - total_start
     print(f"\n{'='*70}")
-    print(f" QuestionCraft Phase 1 Pipeline Complete: {success_count}/{len(to_run)} stages passed in {total_elapsed:.2f}s")
+    print(
+        f" QuestionCraft Phase 1 Pipeline Complete: {success_count}/{len(to_run)} stages passed in {total_elapsed:.2f}s"
+    )
     print(f"{'='*70}")
 
 

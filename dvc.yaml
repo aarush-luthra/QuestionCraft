@@ -6,12 +6,30 @@
 
 stages:
 
+  # ── Stage 0: Clean, de-duplicate and split (public/proxy train vs RVCE held-out eval) ──
+  build_splits:
+    cmd: python -m src.data.build_splits --config configs/model_config.yaml
+    deps:
+      - src/data/build_splits.py
+      - src/monitoring/model_tests.py
+      - data/processed
+      - data/raw/rvce
+      - data/raw/public
+    params:
+      - configs/model_config.yaml:
+          - splits
+          - data.rvce_banks
+          - data.public_banks
+    outs:
+      - data/splits
+
   # ── Stage 1: Train Difficulty Classifier ──────────────────────────────────
   train_difficulty:
-    cmd: python -m src.models.difficulty_classifier --config configs/model_config.yaml --model-out models/difficulty_classifier.pkl
+    cmd: python -m src.models.difficulty_classifier --config configs/model_config.yaml --data-path data/splits/difficulty_train.parquet --eval-path data/splits/difficulty_rvce_eval.parquet --model-out models/difficulty_classifier.pkl
     deps:
       - src/models/difficulty_classifier.py
-      - data/processed
+      - src/models/rvce_eval.py
+      - data/splits
       - configs/model_config.yaml
     outs:
       - models/difficulty_classifier.pkl:
@@ -25,10 +43,11 @@ stages:
 
   # ── Stage 2: Train Bloom's Taxonomy Classifier ────────────────────────────
   train_blooms:
-    cmd: python -m src.models.blooms_classifier --config configs/model_config.yaml --model-out models/blooms_classifier.pkl
+    cmd: python -m src.models.blooms_classifier --config configs/model_config.yaml --data-path data/splits/blooms_train.parquet --eval-path data/splits/blooms_rvce_eval.parquet --model-out models/blooms_classifier.pkl
     deps:
       - src/models/blooms_classifier.py
-      - data/processed
+      - src/models/rvce_eval.py
+      - data/splits
       - configs/model_config.yaml
     outs:
       - models/blooms_classifier.pkl:
@@ -42,10 +61,11 @@ stages:
 
   # ── Stage 3: Train Computational Thinking (CT) Classifier ─────────────────
   train_ct:
-    cmd: python -m src.models.ct_classifier --config configs/model_config.yaml --model-out models/ct_classifier.pkl
+    cmd: python -m src.models.ct_classifier --config configs/model_config.yaml --data-path data/splits/ct_train.parquet --eval-path data/splits/ct_rvce_eval.parquet --model-out models/ct_classifier.pkl
     deps:
       - src/models/ct_classifier.py
-      - data/processed
+      - src/models/rvce_eval.py
+      - data/splits
       - configs/model_config.yaml
     outs:
       - models/ct_classifier.pkl:

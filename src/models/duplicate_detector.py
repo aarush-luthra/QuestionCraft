@@ -19,8 +19,8 @@ import json
 import logging
 import os
 import random
-from pathlib import Path
 from itertools import combinations
+from pathlib import Path
 
 import click
 import mlflow
@@ -48,12 +48,14 @@ logger = logging.getLogger("questioncraft.duplicate_detector")
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
+
 def load_config(path: str) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
 
 
 # ── Loader helpers ─────────────────────────────────────────────────────────────
+
 
 def load_from_json(json_path: Path) -> pd.DataFrame:
     with open(json_path) as f:
@@ -76,6 +78,7 @@ def load_from_parquet(parquet_path: Path, sample_n: int | None = None) -> pd.Dat
 
 
 # ── Core detection logic ───────────────────────────────────────────────────────
+
 
 class DuplicateDetector:
     """
@@ -145,16 +148,20 @@ class DuplicateDetector:
         for i, j in combinations(range(n), 2):
             sim = float(sim_matrix[i, j])
             if sim >= self.threshold:
-                flagged.append({
-                    "id_a": ids[i],
-                    "question_a": texts[i],
-                    "id_b": ids[j],
-                    "question_b": texts[j],
-                    "cosine_similarity": round(sim, 6),
-                })
+                flagged.append(
+                    {
+                        "id_a": ids[i],
+                        "question_a": texts[i],
+                        "id_b": ids[j],
+                        "question_b": texts[j],
+                        "cosine_similarity": round(sim, 6),
+                    }
+                )
 
         if not flagged:
-            result_df = pd.DataFrame(columns=["id_a", "question_a", "id_b", "question_b", "cosine_similarity"])
+            result_df = pd.DataFrame(
+                columns=["id_a", "question_a", "id_b", "question_b", "cosine_similarity"]
+            )
         else:
             result_df = pd.DataFrame(flagged).sort_values("cosine_similarity", ascending=False)
         logger.info(
@@ -175,11 +182,14 @@ class DuplicateDetector:
 
 # ── Main CLI ───────────────────────────────────────────────────────────────────
 
+
 @click.command()
 @click.option("--config", default="configs/model_config.yaml", show_default=True)
 @click.option("--input", "json_input", default=None, help="Path to RVCE question_bank.json")
 @click.option("--input-parquet", default=None, help="Path to a processed Parquet file")
-@click.option("--sample-n", default=500, show_default=True, help="Max questions to sample from Parquet")
+@click.option(
+    "--sample-n", default=500, show_default=True, help="Max questions to sample from Parquet"
+)
 @click.option("--out-dir", default="data/processed", show_default=True)
 def main(
     config: str,
@@ -233,14 +243,18 @@ def main(
         # Compute & log stats
         total_pairs = len(df) * (len(df) - 1) // 2
         dup_rate = len(dup_df) / total_pairs if total_pairs > 0 else 0.0
-        mlflow.log_metrics({
-            "num_duplicate_pairs": len(dup_df),
-            "total_pairs_checked": total_pairs,
-            "duplicate_rate": dup_rate,
-        })
+        mlflow.log_metrics(
+            {
+                "num_duplicate_pairs": len(dup_df),
+                "total_pairs_checked": total_pairs,
+                "duplicate_rate": dup_rate,
+            }
+        )
         if not dup_df.empty:
             mlflow.log_metric("max_similarity", float(dup_df["cosine_similarity"].max()))
-            mlflow.log_metric("mean_duplicate_similarity", float(dup_df["cosine_similarity"].mean()))
+            mlflow.log_metric(
+                "mean_duplicate_similarity", float(dup_df["cosine_similarity"].mean())
+            )
 
         # Save results
         out_path = Path(out_dir)

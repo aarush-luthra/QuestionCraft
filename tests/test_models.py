@@ -4,9 +4,8 @@ tests/test_models.py
 Smoke and logic unit tests for classifiers, pipelines, and duplicate detector.
 """
 
-import pytest
-from src.models.blooms_classifier import normalise_label, VALID_LABELS
-from src.models.ct_classifier import parse_ct_labels, CT_LABELS
+from src.models.blooms_classifier import normalise_label
+from src.models.ct_classifier import parse_ct_labels
 
 
 def test_blooms_label_normalization():
@@ -41,6 +40,7 @@ def test_ct_label_parsing_empty():
 def test_model_config_hyperparameters():
     """Verify that model_config.yaml specifies required model hyperparameters."""
     from src.utils.config import load_config
+
     cfg = load_config()
 
     diff_lr = cfg["difficulty_classifier"]["logistic_regression"]

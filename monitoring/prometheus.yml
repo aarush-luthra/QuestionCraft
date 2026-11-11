@@ -27,12 +27,3 @@ scrape_configs:
           service: "questioncraft"
           environment: "production"
           phase: "2"
-
-  # ── MLflow Tracking Server ─────────────────────────────────────────────────
-  - job_name: "mlflow"
-    metrics_path: "/metrics"
-    scrape_interval: 30s
-    static_configs:
-      - targets: ["mlflow-server:5000"]
-        labels:
-          service: "mlflow"

@@ -39,6 +39,7 @@ logger = logging.getLogger("questioncraft.download")
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def load_config(config_path: str = "configs/model_config.yaml") -> dict:
     with open(config_path) as f:
         return yaml.safe_load(f)
@@ -62,10 +63,13 @@ def save_manifest(manifest: dict, out_dir: Path) -> None:
 
 # ── Dataset downloaders ────────────────────────────────────────────────────────
 
+
 def download_arc(raw_dir: Path, cfg: dict) -> dict[str, str]:
     """Download ARC-Challenge and ARC-Easy, return {split_name: parquet_path}."""
     records: dict[str, str] = {}
-    hf_path = cfg.get("data", {}).get("datasets", {}).get("arc", {}).get("hf_path", "allenai/ai2_arc")
+    hf_path = (
+        cfg.get("data", {}).get("datasets", {}).get("arc", {}).get("hf_path", "allenai/ai2_arc")
+    )
     for subset in ("ARC-Challenge", "ARC-Easy"):
         logger.info("Downloading ARC subset: %s …", subset)
         ds = load_dataset(hf_path, subset)
@@ -76,7 +80,11 @@ def download_arc(raw_dir: Path, cfg: dict) -> dict[str, str]:
         for split_name, split_ds in ds.items():
             # Normalise columns: keep question + answerKey + choices
             split_ds = split_ds.remove_columns(
-                [c for c in split_ds.column_names if c not in ("id", "question", "choices", "answerKey")]
+                [
+                    c
+                    for c in split_ds.column_names
+                    if c not in ("id", "question", "choices", "answerKey")
+                ]
             )
             out_path = out_dir / f"{split_name}.parquet"
             split_ds.to_parquet(str(out_path))
@@ -99,7 +107,11 @@ def download_race(raw_dir: Path, cfg: dict | None = None) -> dict[str, str]:
 
     for split_name, split_ds in ds.items():
         split_ds = split_ds.remove_columns(
-            [c for c in split_ds.column_names if c not in ("example_id", "article", "question", "answer", "options")]
+            [
+                c
+                for c in split_ds.column_names
+                if c not in ("example_id", "article", "question", "answer", "options")
+            ]
         )
         out_path = out_dir / f"{split_name}.parquet"
         split_ds.to_parquet(str(out_path))
@@ -161,6 +173,7 @@ def download_blooms_kaggle(raw_dir: Path) -> dict[str, str]:
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
+
 @click.command()
 @click.option(
     "--config",
@@ -193,8 +206,7 @@ def main(config: str, raw_dir: str | None) -> None:
     manifest = {
         "seed": SEED,
         "files": {
-            key: {"path": path, "md5": file_md5(Path(path))}
-            for key, path in all_records.items()
+            key: {"path": path, "md5": file_md5(Path(path))} for key, path in all_records.items()
         },
     }
     save_manifest(manifest, raw_path)

@@ -4,8 +4,8 @@ tests/conftest.py
 Shared pytest fixtures for QuestionCraft test suite.
 """
 
-import pytest
 import pandas as pd
+import pytest
 
 
 @pytest.fixture
@@ -23,16 +23,18 @@ def sample_questions():
 @pytest.fixture
 def sample_dataframe(sample_questions):
     """Return a mock questions DataFrame."""
-    return pd.DataFrame({
-        "question_id": [f"q_{i}" for i in range(len(sample_questions))],
-        "question_text": sample_questions,
-        "difficulty": ["Easy", "Medium", "Hard", "Medium", "Hard"],
-        "blooms_level": ["L1", "L2", "L6", "L3", "L4"],
-        "ct_skills": [
-            "Pattern Recognition",
-            "Algorithmic Thinking",
-            "Decomposition|Algorithmic Thinking|Abstraction",
-            "Algorithmic Thinking",
-            "Evaluation & Debugging|Abstraction",
-        ],
-    })
+    return pd.DataFrame(
+        {
+            "question_id": [f"q_{i}" for i in range(len(sample_questions))],
+            "question_text": sample_questions,
+            "difficulty": ["Easy", "Medium", "Hard", "Medium", "Hard"],
+            "blooms_level": ["L1", "L2", "L6", "L3", "L4"],
+            "ct_skills": [
+                "Pattern Recognition",
+                "Algorithmic Thinking",
+                "Decomposition|Algorithmic Thinking|Abstraction",
+                "Algorithmic Thinking",
+                "Evaluation & Debugging|Abstraction",
+            ],
+        }
+    )

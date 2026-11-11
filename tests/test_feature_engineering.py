@@ -5,6 +5,7 @@ Unit tests for FeatureExtractor class and linguistic / semantic feature extracti
 """
 
 import pytest
+
 from src.data.feature_engineering import FeatureExtractor
 
 
