@@ -21,6 +21,7 @@ from pathlib import Path
 import click
 import joblib
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import mlflow
@@ -58,12 +59,31 @@ logger = logging.getLogger("questioncraft.blooms_classifier")
 # ── Bloom's level normalisation map ───────────────────────────────────────────
 # Handles various label formats that may appear in different datasets
 _BLOOMS_NORM: dict[str, str] = {
-    "1": "L1", "l1": "L1", "remember": "L1", "knowledge": "L1",
-    "2": "L2", "l2": "L2", "understand": "L2", "comprehension": "L2",
-    "3": "L3", "l3": "L3", "apply": "L3", "application": "L3",
-    "4": "L4", "l4": "L4", "analyze": "L4", "analysis": "L4",
-    "5": "L5", "l5": "L5", "evaluate": "L5", "evaluation": "L5",
-    "6": "L6", "l6": "L6", "create": "L6", "creation": "L6", "synthesis": "L6",
+    "1": "L1",
+    "l1": "L1",
+    "remember": "L1",
+    "knowledge": "L1",
+    "2": "L2",
+    "l2": "L2",
+    "understand": "L2",
+    "comprehension": "L2",
+    "3": "L3",
+    "l3": "L3",
+    "apply": "L3",
+    "application": "L3",
+    "4": "L4",
+    "l4": "L4",
+    "analyze": "L4",
+    "analysis": "L4",
+    "5": "L5",
+    "l5": "L5",
+    "evaluate": "L5",
+    "evaluation": "L5",
+    "6": "L6",
+    "l6": "L6",
+    "create": "L6",
+    "creation": "L6",
+    "synthesis": "L6",
 }
 
 VALID_LABELS = ["L1", "L2", "L3", "L4", "L5", "L6"]
@@ -75,18 +95,18 @@ def normalise_label(raw: str) -> str | None:
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
+
 def load_config(path: str) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
 
 
 def df_md5(df: pd.DataFrame) -> str:
-    return hashlib.md5(
-        pd.util.hash_pandas_object(df, index=True).values.tobytes()
-    ).hexdigest()
+    return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values.tobytes()).hexdigest()
 
 
 # ── Model builder ──────────────────────────────────────────────────────────────
+
 
 def build_pipeline(cfg: dict) -> Pipeline:
     tfidf_cfg = cfg["tfidf"]
@@ -113,6 +133,7 @@ def build_pipeline(cfg: dict) -> Pipeline:
 
 # ── Evaluation helpers ─────────────────────────────────────────────────────────
 
+
 def plot_confusion_matrix(y_true, y_pred, labels: list[str], out_path: Path) -> None:
     cm = confusion_matrix(y_true, y_pred, labels=labels)
     fig, ax = plt.subplots(figsize=(8, 7))
@@ -127,11 +148,13 @@ def plot_confusion_matrix(y_true, y_pred, labels: list[str], out_path: Path) -> 
 
 # ── Main training routine ──────────────────────────────────────────────────────
 
+
 @click.command()
 @click.option("--config", default="configs/model_config.yaml", show_default=True)
 @click.option("--data-path", default=None, help="Override processed data path")
+@click.option("--eval-path", default=None, help="RVCE held-out eval parquet (from build_splits)")
 @click.option("--model-out", default="models/blooms_classifier.pkl", show_default=True)
-def main(config: str, data_path: str | None, model_out: str) -> None:
+def main(config: str, data_path: str | None, eval_path: str | None, model_out: str) -> None:
     cfg = load_config(config)
     blooms_cfg = cfg["blooms_classifier"]
     processed_dir = Path(cfg["data"]["processed_dir"])
@@ -143,6 +166,8 @@ def main(config: str, data_path: str | None, model_out: str) -> None:
         raise SystemExit(1)
 
     df = pd.read_parquet(data_file)
+    if "label" in df.columns and "blooms_level" not in df.columns:  # data/splits format
+        df = df.rename(columns={"label": "blooms_level"})
     logger.info("Loaded %d samples from %s", len(df), data_file)
 
     # Normalise labels
@@ -162,7 +187,8 @@ def main(config: str, data_path: str | None, model_out: str) -> None:
     y = df["blooms_norm"].tolist()
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
+        X,
+        y,
         test_size=cfg["global"]["test_size"],
         random_state=SEED,
         stratify=y,
@@ -183,17 +209,13 @@ def main(config: str, data_path: str | None, model_out: str) -> None:
         mlflow.log_param("seed", SEED)
         mlflow.log_param("num_classes", len(VALID_LABELS))
         mlflow.log_params({f"tfidf_{k}": v for k, v in cfg["tfidf"].items()})
-        mlflow.log_params({
-            f"lr_{k}": v
-            for k, v in blooms_cfg["logistic_regression"].items()
-        })
+        mlflow.log_params({f"lr_{k}": v for k, v in blooms_cfg["logistic_regression"].items()})
 
         pipeline = build_pipeline(cfg)
         logger.info("Training pipeline …")
         pipeline.fit(X_train, y_train)
 
         # Cross-validation
-        present_labels = sorted(set(y_train))
         cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
         cv_scores = cross_val_score(
             pipeline, X_train, y_train, cv=cv, scoring="f1_macro", n_jobs=-1
@@ -204,17 +226,19 @@ def main(config: str, data_path: str | None, model_out: str) -> None:
 
         # Test evaluation
         y_pred = pipeline.predict(X_test)
-        acc  = accuracy_score(y_test, y_pred)
-        f1   = f1_score(y_test, y_pred, average="macro", zero_division=0)
+        acc = accuracy_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred, average="macro", zero_division=0)
         prec = precision_score(y_test, y_pred, average="macro", zero_division=0)
-        rec  = recall_score(y_test, y_pred, average="macro", zero_division=0)
+        rec = recall_score(y_test, y_pred, average="macro", zero_division=0)
 
-        mlflow.log_metrics({
-            "test_accuracy": acc,
-            "test_f1_macro": f1,
-            "test_precision_macro": prec,
-            "test_recall_macro": rec,
-        })
+        mlflow.log_metrics(
+            {
+                "test_accuracy": acc,
+                "test_f1_macro": f1,
+                "test_precision_macro": prec,
+                "test_recall_macro": rec,
+            }
+        )
         logger.info("Test → Accuracy: %.4f | F1-macro: %.4f", acc, f1)
         print(classification_report(y_test, y_pred, labels=VALID_LABELS, zero_division=0))
 
@@ -224,11 +248,13 @@ def main(config: str, data_path: str | None, model_out: str) -> None:
         )
         for label in VALID_LABELS:
             if label in report:
-                mlflow.log_metrics({
-                    f"f1_{label}": report[label]["f1-score"],
-                    f"precision_{label}": report[label]["precision"],
-                    f"recall_{label}": report[label]["recall"],
-                })
+                mlflow.log_metrics(
+                    {
+                        f"f1_{label}": report[label]["f1-score"],
+                        f"precision_{label}": report[label]["precision"],
+                        f"recall_{label}": report[label]["recall"],
+                    }
+                )
 
         # Confusion matrix
         tmp_dir = Path("tmp_artifacts")
@@ -237,13 +263,25 @@ def main(config: str, data_path: str | None, model_out: str) -> None:
         plot_confusion_matrix(y_test, y_pred, VALID_LABELS, cm_path)
         mlflow.log_artifact(str(cm_path), artifact_path="plots")
 
+        # Held-out evaluation on real RVCE papers (never trained on)
+        from src.models.rvce_eval import evaluate_single_label, label_source_mix
+
+        rvce = evaluate_single_label(pipeline, eval_path, VALID_LABELS)
+        if rvce:
+            mlflow.log_metrics(rvce)
+            mlflow.log_param("rvce_eval_label_sources", label_source_mix(eval_path))
+            logger.info("RVCE held-out → %s", {k: round(v, 4) for k, v in rvce.items()})
+
         # Save model
         model_path = Path(model_out)
         model_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump(pipeline, model_path)
         mlflow.sklearn.log_model(pipeline, artifact_path="model")
         model_uri = f"runs:/{run.info.run_id}/model"
-        mlflow.register_model(model_uri, "questioncraft_blooms_classifier")
+        mv = mlflow.register_model(model_uri, "questioncraft_blooms_classifier")
+        from src.registry.model_manager import ModelRegistryManager
+
+        ModelRegistryManager(cfg["global"]["mlflow_tracking_uri"]).tag_version("blooms", mv.version)
 
     logger.info("Training complete.")
 

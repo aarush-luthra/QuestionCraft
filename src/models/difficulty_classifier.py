@@ -14,7 +14,6 @@ Usage:
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
 import os
 import random
@@ -23,6 +22,7 @@ from pathlib import Path
 import click
 import joblib
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import mlflow
@@ -30,6 +30,8 @@ import mlflow.sklearn
 import numpy as np
 import pandas as pd
 import yaml
+from sklearn.base import BaseEstimator, ClassifierMixin
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
@@ -41,10 +43,7 @@ from sklearn.metrics import (
     recall_score,
 )
 from sklearn.model_selection import StratifiedKFold, cross_val_score, train_test_split
-from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.pipeline import Pipeline
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.preprocessing import LabelEncoder
 
 # ── Reproducibility ────────────────────────────────────────────────────────────
 SEED = 42
@@ -62,30 +61,31 @@ logger = logging.getLogger("questioncraft.difficulty_classifier")
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
+
 def load_config(path: str) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
 
 
 def df_md5(df: pd.DataFrame) -> str:
-    return hashlib.md5(
-        pd.util.hash_pandas_object(df, index=True).values.tobytes()
-    ).hexdigest()
+    return hashlib.md5(pd.util.hash_pandas_object(df, index=True).values.tobytes()).hexdigest()
 
 
 # ── Model Builder ──────────────────────────────────────────────────────────────
+
 
 class LabelEncodedXGBClassifier(BaseEstimator, ClassifierMixin):
     def __init__(self, labels=None, **kwargs):
         self.labels = labels or ["Easy", "Medium", "Hard"]
         self.kwargs = kwargs
-        self.label_to_id = {l: i for i, l in enumerate(self.labels)}
-        self.id_to_label = {i: l for i, l in enumerate(self.labels)}
+        self.label_to_id = {lab: i for i, lab in enumerate(self.labels)}
+        self.id_to_label = {i: lab for i, lab in enumerate(self.labels)}
         from xgboost import XGBClassifier
+
         self.clf = XGBClassifier(**kwargs)
 
     def fit(self, X, y):
-        y_enc = np.array([self.label_to_id[l] for l in y])
+        y_enc = np.array([self.label_to_id[lab] for lab in y])
         self.clf.fit(X, y_enc)
         self.classes_ = np.array(self.labels)
         return self
@@ -137,6 +137,7 @@ def build_pipeline(cfg: dict, model_type: str = "logistic_regression") -> Pipeli
 
 # ── Evaluation helpers ─────────────────────────────────────────────────────────
 
+
 def plot_confusion_matrix(y_true, y_pred, labels: list[str], out_path: Path) -> None:
     cm = confusion_matrix(y_true, y_pred, labels=labels)
     fig, ax = plt.subplots(figsize=(6, 5))
@@ -151,9 +152,11 @@ def plot_confusion_matrix(y_true, y_pred, labels: list[str], out_path: Path) -> 
 
 # ── Main training routine ──────────────────────────────────────────────────────
 
+
 @click.command()
 @click.option("--config", default="configs/model_config.yaml", show_default=True)
 @click.option("--data-path", default=None, help="Override processed data path")
+@click.option("--eval-path", default=None, help="RVCE held-out eval parquet (from build_splits)")
 @click.option("--model-out", default="models/difficulty_classifier.pkl", show_default=True)
 @click.option(
     "--model",
@@ -161,7 +164,9 @@ def plot_confusion_matrix(y_true, y_pred, labels: list[str], out_path: Path) -> 
     type=click.Choice(["logistic_regression", "xgboost"]),
     help="Model type: logistic_regression or xgboost",
 )
-def main(config: str, data_path: str | None, model_out: str, model: str) -> None:
+def main(
+    config: str, data_path: str | None, eval_path: str | None, model_out: str, model: str
+) -> None:
     cfg = load_config(config)
     diff_cfg = cfg["difficulty_classifier"]
     processed_dir = Path(cfg["data"]["processed_dir"])
@@ -174,18 +179,23 @@ def main(config: str, data_path: str | None, model_out: str, model: str) -> None
         raise SystemExit(1)
 
     df = pd.read_parquet(data_file)
+    if "label" in df.columns and "difficulty" not in df.columns:  # data/splits format
+        df = df.rename(columns={"label": "difficulty"})
     logger.info("Loaded %d samples from %s", len(df), data_file)
 
     df = df[df["difficulty"].isin(labels)].dropna(subset=["question_text", "difficulty"])
     df = df.sample(frac=1, random_state=SEED).reset_index(drop=True)  # shuffle
     data_hash = df_md5(df)
-    logger.info("Data hash: %s | Class distribution:\n%s", data_hash, df["difficulty"].value_counts())
+    logger.info(
+        "Data hash: %s | Class distribution:\n%s", data_hash, df["difficulty"].value_counts()
+    )
 
     X = df["question_text"].astype(str).tolist()
     y = df["difficulty"].tolist()
 
     X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
+        X,
+        y,
         test_size=cfg["global"]["test_size"],
         random_state=SEED,
         stratify=y,
@@ -211,10 +221,7 @@ def main(config: str, data_path: str | None, model_out: str, model: str) -> None
         if model == "xgboost":
             mlflow.log_params({f"xgb_{k}": v for k, v in diff_cfg.get("xgboost", {}).items()})
         else:
-            mlflow.log_params({
-                f"lr_{k}": v
-                for k, v in diff_cfg["logistic_regression"].items()
-            })
+            mlflow.log_params({f"lr_{k}": v for k, v in diff_cfg["logistic_regression"].items()})
 
         # Build & train
         pipeline = build_pipeline(cfg, model_type=model)
@@ -223,36 +230,44 @@ def main(config: str, data_path: str | None, model_out: str, model: str) -> None
 
         # Cross-validation
         cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=SEED)
-        cv_scores = cross_val_score(pipeline, X_train, y_train, cv=cv, scoring="f1_macro", n_jobs=-1)
+        cv_scores = cross_val_score(
+            pipeline, X_train, y_train, cv=cv, scoring="f1_macro", n_jobs=-1
+        )
         mlflow.log_metric("cv_f1_macro_mean", float(cv_scores.mean()))
         mlflow.log_metric("cv_f1_macro_std", float(cv_scores.std()))
         logger.info("CV F1-macro: %.4f ± %.4f", cv_scores.mean(), cv_scores.std())
 
         # Test evaluation
         y_pred = pipeline.predict(X_test)
-        acc   = accuracy_score(y_test, y_pred)
-        f1    = f1_score(y_test, y_pred, average="macro", zero_division=0)
-        prec  = precision_score(y_test, y_pred, average="macro", zero_division=0)
-        rec   = recall_score(y_test, y_pred, average="macro", zero_division=0)
+        acc = accuracy_score(y_test, y_pred)
+        f1 = f1_score(y_test, y_pred, average="macro", zero_division=0)
+        prec = precision_score(y_test, y_pred, average="macro", zero_division=0)
+        rec = recall_score(y_test, y_pred, average="macro", zero_division=0)
 
-        mlflow.log_metrics({
-            "test_accuracy": acc,
-            "test_f1_macro": f1,
-            "test_precision_macro": prec,
-            "test_recall_macro": rec,
-        })
+        mlflow.log_metrics(
+            {
+                "test_accuracy": acc,
+                "test_f1_macro": f1,
+                "test_precision_macro": prec,
+                "test_recall_macro": rec,
+            }
+        )
         logger.info("Test → Accuracy: %.4f | F1-macro: %.4f", acc, f1)
         print(classification_report(y_test, y_pred, labels=labels, zero_division=0))
 
         # Per-class metrics
-        report = classification_report(y_test, y_pred, labels=labels, output_dict=True, zero_division=0)
+        report = classification_report(
+            y_test, y_pred, labels=labels, output_dict=True, zero_division=0
+        )
         for label in labels:
             if label in report:
-                mlflow.log_metrics({
-                    f"f1_{label.lower()}": report[label]["f1-score"],
-                    f"precision_{label.lower()}": report[label]["precision"],
-                    f"recall_{label.lower()}": report[label]["recall"],
-                })
+                mlflow.log_metrics(
+                    {
+                        f"f1_{label.lower()}": report[label]["f1-score"],
+                        f"precision_{label.lower()}": report[label]["precision"],
+                        f"recall_{label.lower()}": report[label]["recall"],
+                    }
+                )
 
         # Confusion matrix artifact
         tmp_dir = Path("tmp_artifacts")
@@ -261,6 +276,15 @@ def main(config: str, data_path: str | None, model_out: str, model: str) -> None
         plot_confusion_matrix(y_test, y_pred, labels, cm_path)
         mlflow.log_artifact(str(cm_path), artifact_path="plots")
 
+        # Held-out evaluation on real RVCE papers (never trained on)
+        from src.models.rvce_eval import evaluate_single_label, label_source_mix
+
+        rvce = evaluate_single_label(pipeline, eval_path, labels)
+        if rvce:
+            mlflow.log_metrics(rvce)
+            mlflow.log_param("rvce_eval_label_sources", label_source_mix(eval_path))
+            logger.info("RVCE held-out → %s", {k: round(v, 4) for k, v in rvce.items()})
+
         # Save model
         model_path = Path(model_out)
         model_path.parent.mkdir(parents=True, exist_ok=True)
@@ -268,7 +292,12 @@ def main(config: str, data_path: str | None, model_out: str, model: str) -> None
         try:
             mlflow.sklearn.log_model(pipeline, artifact_path="model", serialization_format="pickle")
             model_uri = f"runs:/{run.info.run_id}/model"
-            mlflow.register_model(model_uri, "questioncraft_difficulty_classifier")
+            mv = mlflow.register_model(model_uri, "questioncraft_difficulty_classifier")
+            from src.registry.model_manager import ModelRegistryManager
+
+            ModelRegistryManager(cfg["global"]["mlflow_tracking_uri"]).tag_version(
+                "difficulty", mv.version
+            )
         except Exception as e:
             logger.warning("Could not register model via mlflow.sklearn: %s", e)
         mlflow.log_artifact(str(model_path))

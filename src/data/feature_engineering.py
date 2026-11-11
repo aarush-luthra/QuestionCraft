@@ -16,7 +16,6 @@ Usage:
 from __future__ import annotations
 
 import logging
-import os
 import re
 import string
 from pathlib import Path
@@ -38,6 +37,7 @@ _NLTK_RESOURCES = [
     "stopwords",
 ]
 
+
 def _ensure_nltk_resources() -> None:
     for resource in _NLTK_RESOURCES:
         try:
@@ -50,6 +50,7 @@ def _ensure_nltk_resources() -> None:
         except LookupError:
             nltk.download(resource, quiet=True)
 
+
 _ensure_nltk_resources()
 
 logger = logging.getLogger("questioncraft.feature_engineering")
@@ -59,6 +60,7 @@ _DEFAULT_CONFIG = "configs/model_config.yaml"
 
 
 # ── FeatureExtractor ───────────────────────────────────────────────────────────
+
 
 class FeatureExtractor:
     """
@@ -76,12 +78,10 @@ class FeatureExtractor:
 
         # Build lookup sets / dicts from config
         self.blooms_verbs: dict[str, set[str]] = {
-            level: set(verbs)
-            for level, verbs in self.fe_cfg.get("blooms_verbs", {}).items()
+            level: set(verbs) for level, verbs in self.fe_cfg.get("blooms_verbs", {}).items()
         }
         self.ct_keywords: dict[str, set[str]] = {
-            skill: set(kws)
-            for skill, kws in self.fe_cfg.get("ct_keywords", {}).items()
+            skill: set(kws) for skill, kws in self.fe_cfg.get("ct_keywords", {}).items()
         }
         self.pos_tags_of_interest: list[str] = self.fe_cfg.get(
             "pos_tags", ["NN", "VB", "JJ", "RB", "WP"]
@@ -169,19 +169,14 @@ class FeatureExtractor:
                 if tag.startswith(prefix):
                     counts[prefix] = counts.get(prefix, 0) + 1
 
-        return {
-            f"pos_frac_{tag}": counts.get(tag, 0) / total
-            for tag in self.pos_tags_of_interest
-        }
+        return {f"pos_frac_{tag}": counts.get(tag, 0) / total for tag in self.pos_tags_of_interest}
 
     # ── Bloom's verb indicators ────────────────────────────────────────────────
 
     def _blooms_features(self, lower_text: str) -> dict[str, float]:
         features: dict[str, float] = {}
         for level, verbs in self.blooms_verbs.items():
-            hit_count = sum(
-                1 for v in verbs if re.search(rf"\b{re.escape(v)}\b", lower_text)
-            )
+            hit_count = sum(1 for v in verbs if re.search(rf"\b{re.escape(v)}\b", lower_text))
             features[f"blooms_{level}_hits"] = float(hit_count)
             features[f"blooms_{level}_any"] = float(hit_count > 0)
         return features
@@ -192,9 +187,7 @@ class FeatureExtractor:
         features: dict[str, float] = {}
         for skill, kws in self.ct_keywords.items():
             slug = skill.lower().replace(" ", "_").replace("&", "and")
-            hit_count = sum(
-                1 for kw in kws if re.search(rf"\b{re.escape(kw)}\b", lower_text)
-            )
+            hit_count = sum(1 for kw in kws if re.search(rf"\b{re.escape(kw)}\b", lower_text))
             features[f"ct_{slug}_hits"] = float(hit_count)
             features[f"ct_{slug}_any"] = float(hit_count > 0)
         return features
@@ -224,7 +217,9 @@ class FeatureExtractor:
 
         return features
 
-    def extract_batch(self, texts: list[str], n_jobs: int = -1, batch_size: int = 250) -> pd.DataFrame:
+    def extract_batch(
+        self, texts: list[str], n_jobs: int = -1, batch_size: int = 250
+    ) -> pd.DataFrame:
         """
         Extract features for a list of question strings using multi-core parallelization.
 
@@ -237,6 +232,7 @@ class FeatureExtractor:
             return pd.DataFrame()
         try:
             from joblib import Parallel, delayed
+
             rows = Parallel(n_jobs=n_jobs, batch_size=batch_size)(
                 delayed(self.extract)(t) for t in texts
             )
@@ -256,7 +252,6 @@ class FeatureExtractor:
 
 if __name__ == "__main__":
     import json
-    import sys
 
     logging.basicConfig(level=logging.INFO)
     fe = FeatureExtractor()
@@ -270,7 +265,7 @@ if __name__ == "__main__":
         df = fe.extract_batch(questions)
         print(df.to_string())
         df.to_parquet("data/processed/rvce_features.parquet", index=False)
-        print(f"\nSaved features → data/processed/rvce_features.parquet")
+        print("\nSaved features → data/processed/rvce_features.parquet")
     else:
         sample = "Design an algorithm to sort a list of integers using merge sort."
         print(json.dumps(fe.extract(sample), indent=2))

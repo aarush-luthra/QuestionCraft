@@ -1,7 +1,8 @@
 """
 src/monitoring/model_tests.py
 =============================
-Great Expectations-style data validation and model quality tests.
+Rule-based data validation and model quality tests (custom implementation;
+Great Expectations is not used).
 
 Implements data validation suites for:
 - Input data schema validation
@@ -19,7 +20,6 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger("questioncraft.monitoring.model_tests")
@@ -28,6 +28,7 @@ logger = logging.getLogger("questioncraft.monitoring.model_tests")
 @dataclass
 class ValidationResult:
     """Result of a single validation check."""
+
     test_name: str
     passed: bool
     message: str
@@ -36,8 +37,8 @@ class ValidationResult:
 
 class DataValidationSuite:
     """
-    Great Expectations-inspired data validation suite for QuestionCraft.
-    
+    Rule-based data validation suite for QuestionCraft (custom implementation).
+
     Validates incoming data against expected schemas, distributions,
     and quality thresholds before model training or inference.
     """
@@ -113,7 +114,7 @@ class DataValidationSuite:
                 test_name=f"values_in_set:{column}",
                 passed=bool(len(unexpected) == 0),
                 message=(
-                    f"All values in expected set"
+                    "All values in expected set"
                     if not unexpected
                     else f"Unexpected values: {unexpected}"
                 ),
@@ -230,3 +231,34 @@ def validate_inference_input(questions: list[str]) -> dict:
     suite.expect_column_min_length(df, "question_text", min_length=5)
     suite.expect_table_row_count_between(df, min_rows=1, max_rows=100)
     return suite.summary
+
+
+def clean_text_dataset(
+    df: pd.DataFrame,
+    text_col: str = "question_text",
+    label_col: str | None = None,
+    min_length: int = 5,
+) -> tuple[pd.DataFrame, dict]:
+    """
+    Remediate the data-quality problems the validation suite detects.
+
+    Drops too-short texts, texts whose label conflicts across duplicates, and
+    exact duplicate texts (which would otherwise leak between train and test).
+    Returns the cleaned frame plus a report of what was removed.
+    """
+    report = {"rows_before": len(df)}
+    out = df.dropna(subset=[text_col]).copy()
+    out = out[out[text_col].astype(str).str.strip().str.len() >= min_length]
+    report["removed_too_short"] = report["rows_before"] - len(out)
+
+    if label_col is not None:
+        conflicting = out.groupby(text_col)[label_col].nunique()
+        conflicting = conflicting[conflicting > 1].index
+        report["removed_conflicting_label_texts"] = int(len(conflicting))
+        out = out[~out[text_col].isin(conflicting)]
+
+    before = len(out)
+    out = out.drop_duplicates(subset=[text_col]).reset_index(drop=True)
+    report["removed_duplicates"] = before - len(out)
+    report["rows_after"] = len(out)
+    return out, report

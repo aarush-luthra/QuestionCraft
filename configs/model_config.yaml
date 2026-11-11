@@ -121,6 +121,17 @@ data:
   rvce_banks:                                      # all RVCE datasets (merged at preprocess time)
     - "data/raw/rvce/question_bank.json"
     - "data/raw/rvce/uhv_hs248at.json"
+    - "data/raw/rvce/ai254ta_mlops_qp.json"           # real AI254TA CIE + SEE papers (118 Qs)
+    - "data/raw/rvce/hs251ta_pome_qp.json"            # real POME CIE + SEE papers
+  public_banks:                                    # non-RVCE labelled data (training only)
+    - "data/raw/public/bebras_ct_tasks.json"         # Bebras tasks: official CT tags + age-level difficulty
+    - "data/raw/public/mendeley_cs_blooms.json"      # CS student queries: keyword-heuristic Bloom's (weak)
+
+# ── Train / held-out RVCE evaluation splits (src/data/build_splits.py) ────────
+splits:
+  out_dir: "data/splits"
+  rvce_eval_banks: ["ai254ta_mlops_qp", "hs251ta_pome_qp", "uhv_hs248at"]   # real papers: never trained on
+  exclude_label_sources: ["keyword_heuristic"]     # too noisy to train on (kept for traceability)
   datasets:
     arc:
       hf_path: "allenai/ai2_arc"

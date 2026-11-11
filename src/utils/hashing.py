@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from pathlib import Path
+
 import pandas as pd
 
 
@@ -28,7 +29,7 @@ def compute_dataframe_md5(df: pd.DataFrame) -> str:
     """
     hashable_df = df.copy()
     for col in hashable_df.columns:
-        if hashable_df[col].apply(lambda x: isinstance(x, (list, set, dict))).any():
+        if hashable_df[col].apply(lambda x: isinstance(x, list | set | dict)).any():
             hashable_df[col] = hashable_df[col].astype(str)
     return hashlib.md5(
         pd.util.hash_pandas_object(hashable_df, index=True).values.tobytes()

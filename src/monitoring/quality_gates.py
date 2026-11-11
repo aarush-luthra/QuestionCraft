@@ -29,6 +29,7 @@ logger = logging.getLogger("questioncraft.monitoring.quality_gates")
 @dataclass
 class QualityGateResult:
     """Result of a quality gate check."""
+
     gate_name: str
     passed: bool
     message: str
@@ -40,7 +41,7 @@ class QualityGateResult:
 class ModelQualityGates:
     """
     Enforces quality gates before model promotion.
-    
+
     All gates must pass for a model to be promoted from Staging → Production.
     This prevents deploying models that regress on key metrics.
     """
@@ -50,7 +51,7 @@ class ModelQualityGates:
         "min_accuracy": 0.85,
         "min_f1_macro": 0.30,
         "max_regression_pct": 0.02,  # Allow max 2% regression
-        "min_cv_stability": 0.05,    # CV std must be < 0.05
+        "min_cv_stability": 0.05,  # CV std must be < 0.05
         "min_test_samples": 100,
     }
 
@@ -111,9 +112,7 @@ class ModelQualityGates:
         self.results.append(result)
         return result
 
-    def check_no_regression(
-        self, new_f1: float, production_f1: float
-    ) -> QualityGateResult:
+    def check_no_regression(self, new_f1: float, production_f1: float) -> QualityGateResult:
         """Gate 3: New model must not regress more than threshold vs production."""
         max_regression = self.thresholds["max_regression_pct"]
         regression = production_f1 - new_f1
@@ -147,9 +146,7 @@ class ModelQualityGates:
         self.results.append(result)
         return result
 
-    def check_data_hash_match(
-        self, training_hash: str, expected_hash: str
-    ) -> QualityGateResult:
+    def check_data_hash_match(self, training_hash: str, expected_hash: str) -> QualityGateResult:
         """Gate 5: Training data hash must match expected hash (reproducibility)."""
         result = QualityGateResult(
             gate_name="data_hash_verification",
@@ -187,7 +184,7 @@ def run_full_quality_check(
 ) -> dict:
     """
     Run all quality gates on a candidate model.
-    
+
     Parameters
     ----------
     metrics : dict

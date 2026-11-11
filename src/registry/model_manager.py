@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("questioncraft.registry")
@@ -34,7 +33,7 @@ REGISTRY_MODELS = {
 class ModelRegistryManager:
     """
     Manages the MLflow Model Registry lifecycle for QuestionCraft models.
-    
+
     Supports Blue-Green deployment through stage transitions:
     - None: Newly registered model, not yet evaluated
     - Staging: Passed quality gates, ready for canary testing
@@ -50,6 +49,7 @@ class ModelRegistryManager:
     def client(self):
         if self._client is None:
             import mlflow
+
             mlflow.set_tracking_uri(self.tracking_uri)
             self._client = mlflow.tracking.MlflowClient()
         return self._client
@@ -61,18 +61,22 @@ class ModelRegistryManager:
             for rm in self.client.search_registered_models():
                 versions = []
                 for v in rm.latest_versions:
-                    versions.append({
-                        "version": v.version,
-                        "stage": v.current_stage,
-                        "status": v.status,
-                        "run_id": v.run_id,
-                        "created": str(v.creation_timestamp),
-                    })
-                results.append({
-                    "name": rm.name,
-                    "latest_versions": versions,
-                    "description": rm.description or "",
-                })
+                    versions.append(
+                        {
+                            "version": v.version,
+                            "stage": v.current_stage,
+                            "status": v.status,
+                            "run_id": v.run_id,
+                            "created": str(v.creation_timestamp),
+                        }
+                    )
+                results.append(
+                    {
+                        "name": rm.name,
+                        "latest_versions": versions,
+                        "description": rm.description or "",
+                    }
+                )
         except Exception as e:
             logger.error("Failed to list registered models: %s", e)
         return results
@@ -89,14 +93,16 @@ class ModelRegistryManager:
             for v in rm.latest_versions:
                 # Get run metrics
                 run = self.client.get_run(v.run_id)
-                versions.append({
-                    "version": v.version,
-                    "stage": v.current_stage,
-                    "run_id": v.run_id,
-                    "metrics": run.data.metrics,
-                    "params": run.data.params,
-                    "created": str(v.creation_timestamp),
-                })
+                versions.append(
+                    {
+                        "version": v.version,
+                        "stage": v.current_stage,
+                        "run_id": v.run_id,
+                        "metrics": run.data.metrics,
+                        "params": run.data.params,
+                        "created": str(v.creation_timestamp),
+                    }
+                )
             return {
                 "name": rm.name,
                 "key": model_key,
@@ -139,11 +145,12 @@ class ModelRegistryManager:
             logger.error("Failed to promote to Staging: %s", e)
             return {"error": str(e)}
 
-    def promote_to_production(self, model_key: str, version: str | None = None,
-                               archive_existing: bool = True) -> dict:
+    def promote_to_production(
+        self, model_key: str, version: str | None = None, archive_existing: bool = True
+    ) -> dict:
         """
         Promote a model version to Production stage.
-        
+
         Implements Blue-Green deployment:
         1. If archive_existing=True, the current Production version is
            moved to Archived stage (Green → becomes backup).
@@ -165,7 +172,8 @@ class ModelRegistryManager:
                     )
                     logger.info(
                         "Archived previous Production %s v%s (Blue-Green swap)",
-                        model_name, pv.version,
+                        model_name,
+                        pv.version,
                     )
 
             # If no version specified, use latest Staging version
@@ -210,13 +218,17 @@ class ModelRegistryManager:
             prod_versions = self.client.get_latest_versions(model_name, stages=["Production"])
             for pv in prod_versions:
                 self.client.transition_model_version_stage(
-                    name=model_name, version=pv.version, stage="Archived",
+                    name=model_name,
+                    version=pv.version,
+                    stage="Archived",
                 )
 
             # Restore most recent archived
             rollback_version = archived[0].version
             self.client.transition_model_version_stage(
-                name=model_name, version=rollback_version, stage="Production",
+                name=model_name,
+                version=rollback_version,
+                stage="Production",
             )
             logger.info("Rolled back %s to v%s", model_name, rollback_version)
             return {
@@ -259,10 +271,138 @@ class ModelRegistryManager:
             return {
                 "model": model_name,
                 "comparison": comparison,
-                "recommendation": f"v{version_a}" if sum(
-                    1 for m in comparison.values() if m["winner"] == f"v{version_a}"
-                ) > len(comparison) / 2 else f"v{version_b}",
+                "recommendation": (
+                    f"v{version_a}"
+                    if sum(1 for m in comparison.values() if m["winner"] == f"v{version_a}")
+                    > len(comparison) / 2
+                    else f"v{version_b}"
+                ),
             }
         except Exception as e:
             logger.error("Comparison failed: %s", e)
             return {"error": str(e)}
+
+    # ── Helpers used by the promotion CLI, pipeline and demo ───────────────────
+
+    def get_stage_version(self, model_key: str, stage: str) -> Any | None:
+        """Latest registry version currently in `stage` (or None)."""
+        model_name = REGISTRY_MODELS.get(model_key)
+        versions = self.client.get_latest_versions(model_name, stages=[stage])
+        return versions[0] if versions else None
+
+    def get_run_metrics_params(self, model_key: str, version: str) -> tuple[dict, dict]:
+        """Metrics and params of the MLflow run that produced a registry version."""
+        mv = self.client.get_model_version(REGISTRY_MODELS[model_key], str(version))
+        run = self.client.get_run(mv.run_id)
+        return dict(run.data.metrics), dict(run.data.params)
+
+    def evaluate_promotion(self, model_key: str, version: str | None = None) -> dict:
+        """
+        Run ALL 6 quality gates for a candidate version against the current Production one.
+
+        Candidate defaults to the Staging version. Metrics, data hashes and the
+        regression baseline all come from the real MLflow runs.
+        """
+        from src.monitoring.quality_gates import run_full_quality_check
+
+        if version is None:
+            staged = self.get_stage_version(model_key, "Staging")
+            if staged is None:
+                return {"error": f"No Staging version for '{model_key}'"}
+            version = staged.version
+        metrics, params = self.get_run_metrics_params(model_key, version)
+        metrics["test_size_n"] = float(params.get("test_size_n", 0))
+
+        prod = self.get_stage_version(model_key, "Production")
+        prod_metrics, prod_params = ({}, {})
+        if prod is not None:
+            prod_metrics, prod_params = self.get_run_metrics_params(model_key, prod.version)
+
+        result = run_full_quality_check(
+            metrics,
+            production_metrics=prod_metrics or None,
+            data_hash=params.get("data_hash"),
+            expected_data_hash=prod_params.get("data_hash") or params.get("data_hash"),
+        )
+        result["candidate_version"] = str(version)
+        result["production_version"] = prod.version if prod is not None else None
+        result["candidate_metrics"] = metrics
+        return result
+
+    def set_demo_state(self, model_key: str, production: str, staging: str) -> None:
+        """Put the registry in a known state: `production` live, `staging` as candidate."""
+        name = REGISTRY_MODELS[model_key]
+        for v in self.client.search_model_versions(f"name='{name}'"):
+            target = {str(production): "Production", str(staging): "Staging"}.get(
+                str(v.version), "None"
+            )
+            if v.current_stage != target:
+                self.client.transition_model_version_stage(
+                    name=name, version=v.version, stage=target
+                )
+
+    def latest_version_for_run(self, model_key: str, run_name: str) -> str | None:
+        """Newest registry version whose source MLflow run has the given run name."""
+        name = REGISTRY_MODELS[model_key]
+        best = None
+        for v in self.client.search_model_versions(f"name='{name}'"):
+            try:
+                rn = self.client.get_run(v.run_id).info.run_name
+            except Exception:
+                continue
+            if rn == run_name and (best is None or int(v.version) > int(best)):
+                best = str(v.version)
+        return best
+
+    def demo_versions(self, model_key: str = "difficulty") -> tuple[str, str]:
+        """(production, staging) for the demo: newest TF-IDF+LR baseline vs newest XGBoost challenger."""
+        prod = self.latest_version_for_run(model_key, "tfidf_lr_baseline")
+        stag = self.latest_version_for_run(model_key, "xgboost_improved")
+        if not prod or not stag:
+            raise RuntimeError(
+                "Need both a tfidf_lr_baseline and an xgboost_improved run registered"
+            )
+        return prod, stag
+
+    def tag_version(self, model_key: str, version: str) -> dict:
+        """Copy run metadata onto the registry version: data hash, model type, run name, key metrics."""
+        name = REGISTRY_MODELS[model_key]
+        mv = self.client.get_model_version(name, str(version))
+        run = self.client.get_run(mv.run_id)
+        tags = {
+            "data_hash": run.data.params.get("data_hash", "unknown"),
+            "data_file": run.data.params.get("data_file", "unknown"),
+            "model_type": run.data.params.get(
+                "model_type", "logistic_regression" if "lr_C" in run.data.params else "unknown"
+            ),
+            "run_name": run.info.run_name or "",
+            "seed": run.data.params.get("seed", ""),
+        }
+        for metric in (
+            "test_accuracy",
+            "test_f1_macro",
+            "test_f1_micro",
+            "rvce_accuracy",
+            "rvce_f1_micro",
+        ):
+            if metric in run.data.metrics:
+                tags[metric] = f"{run.data.metrics[metric]:.4f}"
+        for k, v in tags.items():
+            self.client.set_model_version_tag(name, str(version), k, str(v))
+        return tags
+
+    def sync_tags(self) -> int:
+        """Tag every registered version of every QuestionCraft model; returns how many were tagged."""
+        n = 0
+        for key, name in REGISTRY_MODELS.items():
+            try:
+                versions = self.client.search_model_versions(f"name='{name}'")
+            except Exception:
+                continue
+            for v in versions:
+                try:
+                    self.tag_version(key, v.version)
+                    n += 1
+                except Exception as e:
+                    logger.warning("Could not tag %s v%s: %s", name, v.version, e)
+        return n

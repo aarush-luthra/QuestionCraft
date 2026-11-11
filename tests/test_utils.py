@@ -4,8 +4,6 @@ tests/test_utils.py
 Unit tests for configuration loading, seed setting, and dataset hashing.
 """
 
-from pathlib import Path
-import pandas as pd
 from src.utils.config import load_config
 from src.utils.hashing import compute_dataframe_md5
 from src.utils.seed import set_seed
@@ -27,7 +25,9 @@ def test_seed_setting():
     """Verify that set_seed executes without errors."""
     set_seed(42)
     import random
+
     import numpy as np
+
     val1 = random.random()
     val2 = np.random.rand()
     set_seed(42)

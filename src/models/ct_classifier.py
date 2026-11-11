@@ -29,6 +29,7 @@ from pathlib import Path
 import click
 import joblib
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import mlflow
@@ -74,6 +75,7 @@ CT_LABELS = [
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
+
 def load_config(path: str) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
@@ -82,7 +84,7 @@ def load_config(path: str) -> dict:
 def df_md5(df: pd.DataFrame) -> str:
     hashable_df = df.copy()
     for col in hashable_df.columns:
-        if hashable_df[col].apply(lambda x: isinstance(x, (list, set, dict))).any():
+        if hashable_df[col].apply(lambda x: isinstance(x, list | set | dict)).any():
             hashable_df[col] = hashable_df[col].astype(str)
     return hashlib.md5(
         pd.util.hash_pandas_object(hashable_df, index=True).values.tobytes()
@@ -90,6 +92,7 @@ def df_md5(df: pd.DataFrame) -> str:
 
 
 # ── Label parsing ──────────────────────────────────────────────────────────────
+
 
 def parse_ct_labels(raw: str) -> list[str]:
     """Parse pipe-separated CT skill strings back to a list."""
@@ -100,6 +103,7 @@ def parse_ct_labels(raw: str) -> list[str]:
 
 # ── Model builder ──────────────────────────────────────────────────────────────
 
+
 def build_pipeline(cfg: dict) -> Pipeline:
     tfidf_cfg = cfg["tfidf"]
     lr_cfg = cfg["ct_classifier"]["logistic_regression"]
@@ -108,7 +112,7 @@ def build_pipeline(cfg: dict) -> Pipeline:
         max_features=tfidf_cfg["max_features"],
         ngram_range=tuple(tfidf_cfg["ngram_range"]),
         sublinear_tf=tfidf_cfg["sublinear_tf"],
-        min_df=1,        # CT dataset is small; relax min_df
+        min_df=1,  # CT dataset is small; relax min_df
         max_df=1.0,
         analyzer=tfidf_cfg["analyzer"],
         strip_accents=tfidf_cfg["strip_accents"],
@@ -126,6 +130,7 @@ def build_pipeline(cfg: dict) -> Pipeline:
 
 # ── Per-label bar chart ────────────────────────────────────────────────────────
 
+
 def plot_per_label_f1(report: dict, labels: list[str], out_path: Path) -> None:
     f1_scores = [report.get(label, {}).get("f1-score", 0.0) for label in labels]
     fig, ax = plt.subplots(figsize=(9, 5))
@@ -134,8 +139,13 @@ def plot_per_label_f1(report: dict, labels: list[str], out_path: Path) -> None:
     ax.set_xlabel("F1-Score")
     ax.set_title("CT Skill Classifier — Per-Label F1")
     for bar, score in zip(bars, f1_scores):
-        ax.text(score + 0.01, bar.get_y() + bar.get_height() / 2,
-                f"{score:.3f}", va="center", fontsize=9)
+        ax.text(
+            score + 0.01,
+            bar.get_y() + bar.get_height() / 2,
+            f"{score:.3f}",
+            va="center",
+            fontsize=9,
+        )
     plt.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
@@ -144,9 +154,11 @@ def plot_per_label_f1(report: dict, labels: list[str], out_path: Path) -> None:
 
 # ── Main training routine ──────────────────────────────────────────────────────
 
+
 @click.command()
 @click.option("--config", default="configs/model_config.yaml", show_default=True)
 @click.option("--data-path", default=None, help="Override processed data path")
+@click.option("--eval-path", default=None, help="RVCE held-out eval parquet (from build_splits)")
 @click.option("--model-out", default="models/ct_classifier.pkl", show_default=True)
 @click.option(
     "--threshold",
@@ -154,7 +166,13 @@ def plot_per_label_f1(report: dict, labels: list[str], out_path: Path) -> None:
     type=float,
     help="Probability threshold for positive label (overrides config)",
 )
-def main(config: str, data_path: str | None, model_out: str, threshold: float | None) -> None:
+def main(
+    config: str,
+    data_path: str | None,
+    eval_path: str | None,
+    model_out: str,
+    threshold: float | None,
+) -> None:
     cfg = load_config(config)
     ct_cfg = cfg["ct_classifier"]
     processed_dir = Path(cfg["data"]["processed_dir"])
@@ -167,6 +185,8 @@ def main(config: str, data_path: str | None, model_out: str, threshold: float | 
         raise SystemExit(1)
 
     df = pd.read_parquet(data_file)
+    if "label" in df.columns and "ct_skills" not in df.columns:  # data/splits format
+        df = df.rename(columns={"label": "ct_skills"})
     logger.info("Loaded %d samples from %s", len(df), data_file)
 
     df["ct_skills_list"] = df["ct_skills"].apply(parse_ct_labels)
@@ -182,7 +202,8 @@ def main(config: str, data_path: str | None, model_out: str, threshold: float | 
     X = df["question_text"].astype(str).tolist()
 
     X_train, X_test, Y_train, Y_test = train_test_split(
-        X, Y,
+        X,
+        Y,
         test_size=cfg["global"]["test_size"],
         random_state=SEED,
     )
@@ -204,10 +225,7 @@ def main(config: str, data_path: str | None, model_out: str, threshold: float | 
         mlflow.log_param("prob_threshold", prob_threshold)
         mlflow.log_param("labels", CT_LABELS)
         mlflow.log_params({f"tfidf_{k}": v for k, v in cfg["tfidf"].items()})
-        mlflow.log_params({
-            f"lr_{k}": v
-            for k, v in ct_cfg["logistic_regression"].items()
-        })
+        mlflow.log_params({f"lr_{k}": v for k, v in ct_cfg["logistic_regression"].items()})
 
         pipeline = build_pipeline(cfg)
         logger.info("Training One-vs-Rest pipeline …")
@@ -223,19 +241,23 @@ def main(config: str, data_path: str | None, model_out: str, threshold: float | 
         f1_macro = f1_score(Y_test, Y_pred, average="macro", zero_division=0)
         f1_samples = f1_score(Y_test, Y_pred, average="samples", zero_division=0)
         prec_micro = precision_score(Y_test, Y_pred, average="micro", zero_division=0)
-        rec_micro  = recall_score(Y_test, Y_pred, average="micro", zero_division=0)
+        rec_micro = recall_score(Y_test, Y_pred, average="micro", zero_division=0)
 
-        mlflow.log_metrics({
-            "test_hamming_loss": h_loss,
-            "test_f1_micro": f1_micro,
-            "test_f1_macro": f1_macro,
-            "test_f1_samples": f1_samples,
-            "test_precision_micro": prec_micro,
-            "test_recall_micro": rec_micro,
-        })
+        mlflow.log_metrics(
+            {
+                "test_hamming_loss": h_loss,
+                "test_f1_micro": f1_micro,
+                "test_f1_macro": f1_macro,
+                "test_f1_samples": f1_samples,
+                "test_precision_micro": prec_micro,
+                "test_recall_micro": rec_micro,
+            }
+        )
         logger.info(
             "Test → Hamming Loss: %.4f | F1-micro: %.4f | F1-macro: %.4f",
-            h_loss, f1_micro, f1_macro,
+            h_loss,
+            f1_micro,
+            f1_macro,
         )
 
         # Per-label report
@@ -247,11 +269,13 @@ def main(config: str, data_path: str | None, model_out: str, threshold: float | 
         for label in CT_LABELS:
             if label in report:
                 slug = label.lower().replace(" ", "_").replace("&", "and")
-                mlflow.log_metrics({
-                    f"f1_{slug}": report[label]["f1-score"],
-                    f"precision_{slug}": report[label]["precision"],
-                    f"recall_{slug}": report[label]["recall"],
-                })
+                mlflow.log_metrics(
+                    {
+                        f"f1_{slug}": report[label]["f1-score"],
+                        f"precision_{slug}": report[label]["precision"],
+                        f"recall_{slug}": report[label]["recall"],
+                    }
+                )
 
         # Plot
         tmp_dir = Path("tmp_artifacts")
@@ -260,13 +284,25 @@ def main(config: str, data_path: str | None, model_out: str, threshold: float | 
         plot_per_label_f1(report, CT_LABELS, chart_path)
         mlflow.log_artifact(str(chart_path), artifact_path="plots")
 
+        # Held-out evaluation on real RVCE papers (never trained on)
+        from src.models.rvce_eval import evaluate_multilabel, label_source_mix
+
+        rvce = evaluate_multilabel(pipeline, mlb, prob_threshold, eval_path, parse_ct_labels)
+        if rvce:
+            mlflow.log_metrics(rvce)
+            mlflow.log_param("rvce_eval_label_sources", label_source_mix(eval_path))
+            logger.info("RVCE held-out → %s", {k: round(v, 4) for k, v in rvce.items()})
+
         # Save model & MLB
         model_path = Path(model_out)
         model_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump({"pipeline": pipeline, "mlb": mlb, "threshold": prob_threshold}, model_path)
         mlflow.sklearn.log_model(pipeline, artifact_path="model")
         model_uri = f"runs:/{run.info.run_id}/model"
-        mlflow.register_model(model_uri, "questioncraft_ct_classifier")
+        mv = mlflow.register_model(model_uri, "questioncraft_ct_classifier")
+        from src.registry.model_manager import ModelRegistryManager
+
+        ModelRegistryManager(cfg["global"]["mlflow_tracking_uri"]).tag_version("ct", mv.version)
 
     logger.info("Training complete.")
 

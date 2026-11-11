@@ -45,6 +45,7 @@ logger = logging.getLogger("questioncraft.preprocess")
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+
 def load_config(path: str) -> dict:
     with open(path) as f:
         return yaml.safe_load(f)
@@ -56,6 +57,7 @@ def df_md5(df: pd.DataFrame) -> str:
 
 
 # ── Dataset-specific loaders → normalise to (question, label, *metadata) ──────
+
 
 def load_arc(raw_dir: Path) -> pd.DataFrame:
     """Load ARC-Challenge + ARC-Easy and assign difficulty labels."""
@@ -88,7 +90,7 @@ def load_race(raw_dir: Path) -> pd.DataFrame:
         df["source"] = "race"
         frames.append(df[["question_text", "source"]])
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-    result["difficulty"] = "Medium"   # RACE questions are generally medium difficulty
+    result["difficulty"] = "Medium"  # RACE questions are generally medium difficulty
     return result
 
 
@@ -198,17 +200,19 @@ def load_rvce(bank_path: Path) -> pd.DataFrame:
         # Subject — support 'subject', fall back to 'course_code'
         subject = q.get("subject") or q.get("course_code")
 
-        rows.append({
-            "question_id": q.get("id"),
-            "question_text": q["question"],
-            "difficulty": q.get("difficulty"),
-            "blooms_level": blooms,
-            "ct_skills": ct_str if ct_str else None,
-            "marks": q.get("marks"),
-            "course_outcome": co,
-            "subject": subject,
-            "source": f"rvce_{bank_path.stem}",
-        })
+        rows.append(
+            {
+                "question_id": q.get("id"),
+                "question_text": q["question"],
+                "difficulty": q.get("difficulty"),
+                "blooms_level": blooms,
+                "ct_skills": ct_str if ct_str else None,
+                "marks": q.get("marks"),
+                "course_outcome": co,
+                "subject": subject,
+                "source": f"rvce_{bank_path.stem}",
+            }
+        )
     df = pd.DataFrame(rows)
     logger.info("Loaded %d questions from %s", len(df), bank_path.name)
     return df
@@ -231,13 +235,18 @@ def load_all_rvce_banks(cfg: dict) -> pd.DataFrame:
 def extract_features_with_cache(df: pd.DataFrame, fe: FeatureExtractor) -> pd.DataFrame:
     """Extract features for unique questions and merge back, avoiding duplicate compute."""
     unique_qs = df["question_text"].drop_duplicates().tolist()
-    logger.info("Extracting features for %d unique questions (out of %d total rows) …", len(unique_qs), len(df))
+    logger.info(
+        "Extracting features for %d unique questions (out of %d total rows) …",
+        len(unique_qs),
+        len(df),
+    )
     feat_df = fe.extract_batch(unique_qs)
     feat_df["question_text"] = unique_qs
     return df.merge(feat_df, on="question_text", how="left")
 
 
 # ── Main preprocessing pipeline ────────────────────────────────────────────────
+
 
 @click.command()
 @click.option("--config", default="configs/model_config.yaml", show_default=True)
@@ -285,9 +294,9 @@ def main(config: str) -> None:
             rvce_df[["question_text", "blooms_level", "source"]].dropna(subset=["blooms_level"])
         )
 
-    blooms_df = pd.concat(
-        [f for f in blooms_frames if not f.empty], ignore_index=True
-    ).dropna(subset=["question_text", "blooms_level"])
+    blooms_df = pd.concat([f for f in blooms_frames if not f.empty], ignore_index=True).dropna(
+        subset=["question_text", "blooms_level"]
+    )
 
     if not blooms_df.empty:
         blooms_out = extract_features_with_cache(blooms_df, fe)
@@ -318,4 +327,3 @@ def main(config: str) -> None:
 
 if __name__ == "__main__":
     main()
-

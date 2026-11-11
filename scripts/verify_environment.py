@@ -36,7 +36,7 @@ REQUIRED_PACKAGES = [
 
 def check_python_version() -> bool:
     print(f"[*] Python Version: {sys.version.split()[0]}", end=" ")
-    if sys.version_info >= (3, 10):
+    if sys.version_info >= (3, 10):  # noqa: UP036 - runtime check for users on old Pythons
         print("[OK]")
         return True
     print("[FAIL: Python 3.10+ required]")
@@ -60,6 +60,7 @@ def check_packages() -> bool:
 def check_nltk_resources() -> bool:
     print("\n[*] Checking NLTK resources:")
     import nltk
+
     resources = [
         "tokenizers/punkt",
         "taggers/averaged_perceptron_tagger",
