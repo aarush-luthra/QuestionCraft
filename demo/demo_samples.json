@@ -1,0 +1,26 @@
+{
+  "_note": "Demo inputs. 'expected' labels are LLM-authored drafts for talking points, not ground truth. None of these questions appear in the training or synthetic holdout data.",
+  "classify": [
+    {"question_text": "Define a queue and list its basic operations.", "expected": {"blooms": "L1", "difficulty": "Easy", "ct": ["Abstraction"]}},
+    {"question_text": "What is the difference between a compiler and an interpreter?", "expected": {"blooms": "L1", "difficulty": "Easy", "ct": ["Pattern Recognition"]}},
+    {"question_text": "Explain how a binary heap maintains the heap property after an insertion.", "expected": {"blooms": "L2", "difficulty": "Medium", "ct": ["Algorithmic Thinking"]}},
+    {"question_text": "Describe how a model registry helps a team roll back a faulty model.", "expected": {"blooms": "L2", "difficulty": "Medium", "ct": ["Abstraction"]}},
+    {"question_text": "Write a Python function to count the vowels in a string.", "expected": {"blooms": "L3", "difficulty": "Easy", "ct": ["Algorithmic Thinking"]}},
+    {"question_text": "Apply Kruskal's algorithm to find the minimum spanning tree of the given graph.", "expected": {"blooms": "L3", "difficulty": "Medium", "ct": ["Algorithmic Thinking"]}},
+    {"question_text": "Analyze why a model with 99 percent accuracy can still be useless on a rare-fraud dataset.", "expected": {"blooms": "L4", "difficulty": "Medium", "ct": ["Evaluation & Debugging"]}},
+    {"question_text": "Break down the steps needed to build and deploy a question-difficulty classifier.", "expected": {"blooms": "L4", "difficulty": "Medium", "ct": ["Decomposition"]}},
+    {"question_text": "Evaluate whether a 25-question test set is enough to approve a model for production.", "expected": {"blooms": "L5", "difficulty": "Hard", "ct": ["Evaluation & Debugging"]}},
+    {"question_text": "Critique the decision to retrain a model nightly without checking data quality first.", "expected": {"blooms": "L5", "difficulty": "Hard", "ct": ["Evaluation & Debugging"]}},
+    {"question_text": "Design a pipeline that validates new data, retrains a model and promotes it only if quality gates pass.", "expected": {"blooms": "L6", "difficulty": "Hard", "ct": ["Decomposition", "Algorithmic Thinking", "Evaluation & Debugging"]}},
+    {"question_text": "Create an algorithm that builds a balanced exam paper covering every course outcome.", "expected": {"blooms": "L6", "difficulty": "Hard", "ct": ["Algorithmic Thinking", "Decomposition"]}}
+  ],
+  "duplicate_pairs": [
+    {"question_a": "Explain the difference between a stack and a queue.", "question_b": "How does a stack differ from a queue? Explain.", "expected": "duplicate"},
+    {"question_a": "Define overfitting in machine learning.", "question_b": "What is overfitting in machine learning? Define it.", "expected": "duplicate"},
+    {"question_a": "Explain the difference between a stack and a queue.", "question_b": "Design a pipeline that retrains and promotes a model automatically.", "expected": "not duplicate"}
+  ],
+  "validation_failures": [
+    {"question_text": "Hi", "expected": "rejected: shorter than 5 characters (HTTP 422)"},
+    {"question_text": "", "expected": "rejected: empty (HTTP 422)"}
+  ]
+}

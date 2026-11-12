@@ -126,6 +126,7 @@ data:
   public_banks:                                    # non-RVCE labelled data (training only)
     - "data/raw/public/bebras_ct_tasks.json"         # Bebras tasks: official CT tags + age-level difficulty
     - "data/raw/public/mendeley_cs_blooms.json"      # CS student queries: keyword-heuristic Bloom's (weak)
+    - "data/raw/public/synthetic_cs_questions.json"  # LLM-authored CS questions (label_source=synthetic_llm), train only
 
 # ── Train / held-out RVCE evaluation splits (src/data/build_splits.py) ────────
 splits:
