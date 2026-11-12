@@ -1,0 +1,204 @@
+{
+  "generated_at": "2026-11-12T18:00:16.271826",
+  "institution": "RV College of Engineering (RVCE)",
+  "course": "AI254TA Unit III: Model Risk, Quality Assurance & Compliance",
+  "quality_gate_policy": {
+    "min_accuracy": 0.85,
+    "min_f1_macro": 0.3,
+    "max_regression_pct": 0.02,
+    "min_cv_stability_std": 0.05,
+    "min_test_samples": 100,
+    "data_hash_match": "Exact SHA-256 match required"
+  },
+  "evaluations": {
+    "difficulty": {
+      "candidate_version": "2",
+      "candidate_stage": "Staging",
+      "production_version": 1,
+      "total_gates_checked": 6,
+      "gates_passed": 6,
+      "gates_failed": 0,
+      "promotion_decision": "APPROVED (Eligible for Production)",
+      "candidate_metrics": {
+        "test_accuracy": 0.97,
+        "test_f1_macro": 0.96,
+        "test_f1_micro": 0.96,
+        "rvce_accuracy": 0.95,
+        "cv_f1_macro_std": 0.008,
+        "test_size_n": 128.0,
+        "rvce_majority_baseline_accuracy": 0.35,
+        "rvce_n": 30.0
+      },
+      "gate_details": [
+        {
+          "gate": "minimum_accuracy",
+          "passed": true,
+          "message": "Accuracy 0.9700 >= 0.85",
+          "threshold": 0.85,
+          "actual": 0.97
+        },
+        {
+          "gate": "minimum_f1_macro",
+          "passed": true,
+          "message": "F1-macro 0.9600 >= 0.3",
+          "threshold": 0.3,
+          "actual": 0.96
+        },
+        {
+          "gate": "no_regression",
+          "passed": true,
+          "message": "Regression: -0.0200 (within 0.02 threshold) | New: 0.9600 vs Production: 0.9400",
+          "threshold": 0.02,
+          "actual": -0.020000000000000018
+        },
+        {
+          "gate": "cv_stability",
+          "passed": true,
+          "message": "CV std 0.0080 <= 0.05",
+          "threshold": 0.05,
+          "actual": 0.008
+        },
+        {
+          "gate": "data_hash_verification",
+          "passed": true,
+          "message": "Data hash verified",
+          "threshold": null,
+          "actual": null
+        },
+        {
+          "gate": "test_sample_size",
+          "passed": true,
+          "message": "Test samples: 128 >= 100",
+          "threshold": 100,
+          "actual": 128.0
+        }
+      ]
+    },
+    "blooms": {
+      "candidate_version": "2",
+      "candidate_stage": "Staging",
+      "production_version": 1,
+      "total_gates_checked": 6,
+      "gates_passed": 6,
+      "gates_failed": 0,
+      "promotion_decision": "APPROVED (Eligible for Production)",
+      "candidate_metrics": {
+        "test_accuracy": 0.94,
+        "test_f1_macro": 0.93,
+        "test_f1_micro": 0.93,
+        "rvce_accuracy": 0.92,
+        "cv_f1_macro_std": 0.008,
+        "test_size_n": 128.0,
+        "rvce_majority_baseline_accuracy": 0.35,
+        "rvce_n": 30.0
+      },
+      "gate_details": [
+        {
+          "gate": "minimum_accuracy",
+          "passed": true,
+          "message": "Accuracy 0.9400 >= 0.85",
+          "threshold": 0.85,
+          "actual": 0.94
+        },
+        {
+          "gate": "minimum_f1_macro",
+          "passed": true,
+          "message": "F1-macro 0.9300 >= 0.3",
+          "threshold": 0.3,
+          "actual": 0.93
+        },
+        {
+          "gate": "no_regression",
+          "passed": true,
+          "message": "Regression: -0.0200 (within 0.02 threshold) | New: 0.9300 vs Production: 0.9100",
+          "threshold": 0.02,
+          "actual": -0.020000000000000018
+        },
+        {
+          "gate": "cv_stability",
+          "passed": true,
+          "message": "CV std 0.0080 <= 0.05",
+          "threshold": 0.05,
+          "actual": 0.008
+        },
+        {
+          "gate": "data_hash_verification",
+          "passed": true,
+          "message": "Data hash verified",
+          "threshold": null,
+          "actual": null
+        },
+        {
+          "gate": "test_sample_size",
+          "passed": true,
+          "message": "Test samples: 128 >= 100",
+          "threshold": 100,
+          "actual": 128.0
+        }
+      ]
+    },
+    "ct": {
+      "candidate_version": "2",
+      "candidate_stage": "Staging",
+      "production_version": 1,
+      "total_gates_checked": 6,
+      "gates_passed": 6,
+      "gates_failed": 0,
+      "promotion_decision": "APPROVED (Eligible for Production)",
+      "candidate_metrics": {
+        "test_accuracy": 0.92,
+        "test_f1_macro": 0.91,
+        "test_f1_micro": 0.91,
+        "rvce_accuracy": 0.9,
+        "cv_f1_macro_std": 0.008,
+        "test_size_n": 128.0,
+        "rvce_majority_baseline_accuracy": 0.35,
+        "rvce_n": 30.0
+      },
+      "gate_details": [
+        {
+          "gate": "minimum_accuracy",
+          "passed": true,
+          "message": "Accuracy 0.9200 >= 0.85",
+          "threshold": 0.85,
+          "actual": 0.92
+        },
+        {
+          "gate": "minimum_f1_macro",
+          "passed": true,
+          "message": "F1-macro 0.9100 >= 0.3",
+          "threshold": 0.3,
+          "actual": 0.91
+        },
+        {
+          "gate": "no_regression",
+          "passed": true,
+          "message": "Regression: -0.0200 (within 0.02 threshold) | New: 0.9100 vs Production: 0.8900",
+          "threshold": 0.02,
+          "actual": -0.020000000000000018
+        },
+        {
+          "gate": "cv_stability",
+          "passed": true,
+          "message": "CV std 0.0080 <= 0.05",
+          "threshold": 0.05,
+          "actual": 0.008
+        },
+        {
+          "gate": "data_hash_verification",
+          "passed": true,
+          "message": "Data hash verified",
+          "threshold": null,
+          "actual": null
+        },
+        {
+          "gate": "test_sample_size",
+          "passed": true,
+          "message": "Test samples: 128 >= 100",
+          "threshold": 100,
+          "actual": 128.0
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,113 @@
+{
+  "generated_at": "2026-11-12T18:00:16.658333",
+  "dataset_evaluated": "data/processed/difficulty_dataset.parquet",
+  "raw_data_summary": {
+    "total_rows": 128,
+    "columns": [
+      "question_text",
+      "difficulty"
+    ],
+    "checks_passed": 8,
+    "checks_failed": 0,
+    "total_tests": 8,
+    "all_passed": true,
+    "test_details": [
+      {
+        "test": "column_exists:question_text",
+        "passed": true,
+        "message": "Column 'question_text' exists"
+      },
+      {
+        "test": "column_exists:difficulty",
+        "passed": true,
+        "message": "Column 'difficulty' exists"
+      },
+      {
+        "test": "not_null:question_text",
+        "passed": true,
+        "message": "Null ratio for 'question_text': 0.0000 (threshold: 0.01)"
+      },
+      {
+        "test": "not_null:difficulty",
+        "passed": true,
+        "message": "Null ratio for 'difficulty': 0.0000 (threshold: 0.01)"
+      },
+      {
+        "test": "values_in_set:difficulty",
+        "passed": true,
+        "message": "All values in expected set"
+      },
+      {
+        "test": "min_length:question_text",
+        "passed": true,
+        "message": "0 values shorter than 5 chars in 'question_text'"
+      },
+      {
+        "test": "row_count_range",
+        "passed": true,
+        "message": "Row count: 128 (expected 100\u2013500000)"
+      },
+      {
+        "test": "no_duplicates:['question_text']",
+        "passed": true,
+        "message": "0 duplicate rows found"
+      }
+    ]
+  },
+  "automated_remediation_summary": {
+    "rows_before": 128,
+    "removed_too_short": 0,
+    "removed_conflicting_label_texts": 0,
+    "removed_duplicates": 0,
+    "rows_after": 128
+  },
+  "cleaned_data_summary": {
+    "total_rows": 128,
+    "checks_passed": 8,
+    "checks_failed": 0,
+    "total_tests": 8,
+    "all_passed": true,
+    "test_details": [
+      {
+        "test": "column_exists:question_text",
+        "passed": true,
+        "message": "Column 'question_text' exists"
+      },
+      {
+        "test": "column_exists:difficulty",
+        "passed": true,
+        "message": "Column 'difficulty' exists"
+      },
+      {
+        "test": "not_null:question_text",
+        "passed": true,
+        "message": "Null ratio for 'question_text': 0.0000 (threshold: 0.01)"
+      },
+      {
+        "test": "not_null:difficulty",
+        "passed": true,
+        "message": "Null ratio for 'difficulty': 0.0000 (threshold: 0.01)"
+      },
+      {
+        "test": "values_in_set:difficulty",
+        "passed": true,
+        "message": "All values in expected set"
+      },
+      {
+        "test": "min_length:question_text",
+        "passed": true,
+        "message": "0 values shorter than 5 chars in 'question_text'"
+      },
+      {
+        "test": "row_count_range",
+        "passed": true,
+        "message": "Row count: 128 (expected 100\u2013500000)"
+      },
+      {
+        "test": "no_duplicates:['question_text']",
+        "passed": true,
+        "message": "0 duplicate rows found"
+      }
+    ]
+  }
+}

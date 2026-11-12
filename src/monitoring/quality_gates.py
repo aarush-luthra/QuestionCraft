@@ -10,7 +10,7 @@ from Staging to Production. Aligned with RVCE MLOps AI254TA Unit III:
 
 Quality gates:
 1. Minimum accuracy threshold
-2. Minimum F1-macro threshold  
+2. Minimum F1-macro threshold
 3. No regression vs. current production model
 4. Cross-validation stability check
 5. Data hash verification (reproducibility)

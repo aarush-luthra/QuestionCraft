@@ -1,0 +1,101 @@
+{
+  "generated_at": "2026-11-12T18:00:21.791451",
+  "institution": "RV College of Engineering",
+  "course": "AI254TA Section 7: ML Artifacts Accreditation & Auditability",
+  "verification_summary": {
+    "total_artifacts_required": 11,
+    "artifacts_verified": 11,
+    "all_verified": true,
+    "compliance_status": "100% ACCREDITED"
+  },
+  "artifacts": [
+    {
+      "number": 1,
+      "key": "dataset",
+      "name": "Dataset",
+      "location": "DVC-versioned Parquet in data/processed/ (+ data/splits/ train / RVCE held-out)",
+      "ok": true,
+      "detail": "3 file(s) match data/processed/*.parquet"
+    },
+    {
+      "number": 2,
+      "key": "preprocessing_pipeline",
+      "name": "Preprocessing pipeline",
+      "location": "src/data/preprocess.py, src/data/build_splits.py",
+      "ok": true,
+      "detail": "present"
+    },
+    {
+      "number": 3,
+      "key": "trained_model",
+      "name": "Trained models",
+      "location": "models/*.pkl (difficulty, Bloom's, CT)",
+      "ok": true,
+      "detail": "3 models present"
+    },
+    {
+      "number": 4,
+      "key": "model_configuration",
+      "name": "Model configuration",
+      "location": "configs/model_config.yaml",
+      "ok": true,
+      "detail": "present"
+    },
+    {
+      "number": 5,
+      "key": "evaluation_results",
+      "name": "Evaluation results",
+      "location": "MLflow experiment metrics (incl. rvce_* held-out metrics)",
+      "ok": true,
+      "detail": "6 MLflow run(s) with test_f1_macro"
+    },
+    {
+      "number": 6,
+      "key": "training_logs",
+      "name": "Training logs",
+      "location": "MLflow run telemetry (params, metrics, plots)",
+      "ok": true,
+      "detail": "6 MLflow run(s)"
+    },
+    {
+      "number": 7,
+      "key": "feature_engineering_artifacts",
+      "name": "Feature engineering",
+      "location": "src/data/feature_engineering.py",
+      "ok": true,
+      "detail": "present"
+    },
+    {
+      "number": 8,
+      "key": "tokenizer",
+      "name": "Tokenizer / vectorizer",
+      "location": "TF-IDF vectorizer saved inside each model pipeline",
+      "ok": true,
+      "detail": "fitted TF-IDF vocabulary: 718 terms"
+    },
+    {
+      "number": 9,
+      "key": "model_metadata",
+      "name": "Model metadata",
+      "location": "MLflow registry version tags (data_hash, model_type, run_name)",
+      "ok": true,
+      "detail": "6 registered version(s), 6 tagged with data_hash"
+    },
+    {
+      "number": 10,
+      "key": "deployment_artifacts",
+      "name": "Deployment artifacts",
+      "location": "Dockerfile, docker-compose.yml, .github/workflows/ci.yml",
+      "ok": true,
+      "detail": "present"
+    },
+    {
+      "number": 11,
+      "key": "monitoring_artifacts",
+      "name": "Monitoring artifacts",
+      "location": "monitoring/prometheus.yml, Grafana dashboard and provisioning",
+      "ok": true,
+      "detail": "present"
+    }
+  ]
+}

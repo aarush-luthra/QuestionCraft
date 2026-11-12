@@ -61,3 +61,6 @@ data/processed/*.parquet
 .ruff_cache/
 .coverage
 htmlcov/
+
+# Local presentation reference
+PHASE_2_PRESENTATION_SCRIPT.md

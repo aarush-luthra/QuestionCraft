@@ -1,0 +1,261 @@
+{
+  "generated_at": "2026-11-12T18:00:15.820604",
+  "institution": "RV College of Engineering (RVCE)",
+  "course": "AI254TA Machine Learning Operations",
+  "phase": "Phase 2 - Productionization & Deployment",
+  "tracking_uri": "sqlite:///mlflow.db",
+  "models": {
+    "difficulty": {
+      "registered_model_name": "questioncraft_difficulty_classifier",
+      "description": "### QuestionCraft Difficulty Classifier\nAutomated 3-class question difficulty classification (**Easy**, **Medium**, **Hard**) for Outcome-Based Education (OBE) curriculum alignment at **RV College of Engineering (RVCE)**.\n\n- **Dataset:** RVCE examination question bank + benchmark datasets (ARC, RACE, SciQ)\n- **Evaluation:** Evaluated against held-out real RVCE examination papers (AI254TA & HS251TA)\n- **Governance:** Enforces 6 pre-promotion quality gates before Staging -> Production deployment.",
+      "total_versions": 2,
+      "best_model_summary": {
+        "version": 2,
+        "stage": "Staging",
+        "model_type": "xgboost",
+        "test_accuracy": 0.97,
+        "test_f1_macro": 0.96,
+        "rvce_held_out_accuracy": 0.95,
+        "data_hash": "fb478529629be3a8"
+      },
+      "all_versions": [
+        {
+          "version": 1,
+          "stage": "Production",
+          "status": "READY",
+          "run_id": "eba57e2a8ee1479780ff78dc9c36b773",
+          "run_name": "tfidf_lr_baseline",
+          "created_at": "1794486583154",
+          "tags": {
+            "data_hash": "fb478529629be3a8",
+            "model_type": "logistic_regression",
+            "phase": "Phase 1 Baseline",
+            "test_accuracy": "0.9500",
+            "test_f1_macro": "0.9400",
+            "rvce_accuracy": "0.9300"
+          },
+          "metrics": {
+            "test_accuracy": 0.95,
+            "test_f1_macro": 0.94,
+            "test_f1_micro": 0.94,
+            "rvce_accuracy": 0.93,
+            "cv_f1_macro_std": 0.008,
+            "test_size_n": 128.0,
+            "rvce_majority_baseline_accuracy": 0.35,
+            "rvce_n": 30.0
+          },
+          "parameters": {
+            "model_type": "logistic_regression",
+            "data_hash": "fb478529629be3a8",
+            "data_file": "data/processed/difficulty_dataset.parquet",
+            "seed": "42",
+            "test_size_n": "128",
+            "phase": "Phase 1 - Baseline"
+          }
+        },
+        {
+          "version": 2,
+          "stage": "Staging",
+          "status": "READY",
+          "run_id": "2f31d74e835b4d1eb8ba83189b902453",
+          "run_name": "xgboost_improved",
+          "created_at": "1794486583413",
+          "tags": {
+            "data_hash": "fb478529629be3a8",
+            "model_type": "xgboost",
+            "phase": "Phase 2 Challenger",
+            "test_accuracy": "0.9700",
+            "test_f1_macro": "0.9600",
+            "rvce_accuracy": "0.9500"
+          },
+          "metrics": {
+            "test_accuracy": 0.97,
+            "test_f1_macro": 0.96,
+            "test_f1_micro": 0.96,
+            "rvce_accuracy": 0.95,
+            "cv_f1_macro_std": 0.008,
+            "test_size_n": 128.0,
+            "rvce_majority_baseline_accuracy": 0.35,
+            "rvce_n": 30.0
+          },
+          "parameters": {
+            "model_type": "xgboost",
+            "data_hash": "fb478529629be3a8",
+            "data_file": "data/processed/difficulty_dataset.parquet",
+            "seed": "42",
+            "test_size_n": "128",
+            "phase": "Phase 2 - Production Challenger"
+          }
+        }
+      ]
+    },
+    "blooms": {
+      "registered_model_name": "questioncraft_blooms_classifier",
+      "description": "### QuestionCraft Bloom's Taxonomy Classifier\nAutomated cognitive depth classifier categorizing exam questions into **Bloom's Revised Taxonomy** levels:\n- **L1: Remember**\n- **L2: Understand**\n- **L3: Apply**\n- **L4: Analyze**\n- **L5: Evaluate**\n- **L6: Create**\n\nEnsures test papers strictly meet university course outcome (CO) and program outcome (PO) quotas.",
+      "total_versions": 2,
+      "best_model_summary": {
+        "version": 2,
+        "stage": "Staging",
+        "model_type": "xgboost",
+        "test_accuracy": 0.94,
+        "test_f1_macro": 0.93,
+        "rvce_held_out_accuracy": 0.92,
+        "data_hash": "6c077636b31734d5"
+      },
+      "all_versions": [
+        {
+          "version": 1,
+          "stage": "Production",
+          "status": "READY",
+          "run_id": "f0f1659ffea845ccbc6098a21d9909a6",
+          "run_name": "tfidf_lr_baseline",
+          "created_at": "1794486584051",
+          "tags": {
+            "data_hash": "6c077636b31734d5",
+            "model_type": "logistic_regression",
+            "phase": "Phase 1 Baseline",
+            "test_accuracy": "0.9200",
+            "test_f1_macro": "0.9100",
+            "rvce_accuracy": "0.9000"
+          },
+          "metrics": {
+            "test_accuracy": 0.92,
+            "test_f1_macro": 0.91,
+            "test_f1_micro": 0.91,
+            "rvce_accuracy": 0.9,
+            "cv_f1_macro_std": 0.008,
+            "test_size_n": 128.0,
+            "rvce_majority_baseline_accuracy": 0.35,
+            "rvce_n": 30.0
+          },
+          "parameters": {
+            "model_type": "logistic_regression",
+            "data_hash": "6c077636b31734d5",
+            "data_file": "data/processed/blooms_dataset.parquet",
+            "seed": "42",
+            "test_size_n": "128",
+            "phase": "Phase 1 - Baseline"
+          }
+        },
+        {
+          "version": 2,
+          "stage": "Staging",
+          "status": "READY",
+          "run_id": "6179ff9691f7464494d55fd715241231",
+          "run_name": "xgboost_improved",
+          "created_at": "1794486584482",
+          "tags": {
+            "data_hash": "6c077636b31734d5",
+            "model_type": "xgboost",
+            "phase": "Phase 2 Challenger",
+            "test_accuracy": "0.9400",
+            "test_f1_macro": "0.9300",
+            "rvce_accuracy": "0.9200"
+          },
+          "metrics": {
+            "test_accuracy": 0.94,
+            "test_f1_macro": 0.93,
+            "test_f1_micro": 0.93,
+            "rvce_accuracy": 0.92,
+            "cv_f1_macro_std": 0.008,
+            "test_size_n": 128.0,
+            "rvce_majority_baseline_accuracy": 0.35,
+            "rvce_n": 30.0
+          },
+          "parameters": {
+            "model_type": "xgboost",
+            "data_hash": "6c077636b31734d5",
+            "data_file": "data/processed/blooms_dataset.parquet",
+            "seed": "42",
+            "test_size_n": "128",
+            "phase": "Phase 2 - Production Challenger"
+          }
+        }
+      ]
+    },
+    "ct": {
+      "registered_model_name": "questioncraft_ct_classifier",
+      "description": "### QuestionCraft Computational Thinking (CT) Classifier\nMulti-label classifier identifying foundational computational thinking competencies in question stems:\n- **Decomposition**\n- **Pattern Recognition**\n- **Abstraction**\n- **Algorithmic Thinking**\n- **Evaluation & Debugging**\n\nDeveloped in compliance with the IEEE/ACM Computing Curricula guidelines.",
+      "total_versions": 2,
+      "best_model_summary": {
+        "version": 2,
+        "stage": "Staging",
+        "model_type": "xgboost",
+        "test_accuracy": 0.92,
+        "test_f1_macro": 0.91,
+        "rvce_held_out_accuracy": 0.9,
+        "data_hash": "55e3e1c74cd5e2bc"
+      },
+      "all_versions": [
+        {
+          "version": 1,
+          "stage": "Production",
+          "status": "READY",
+          "run_id": "c17fa10755e6489fa8be10b6ed1602e5",
+          "run_name": "tfidf_lr_baseline",
+          "created_at": "1794486585282",
+          "tags": {
+            "data_hash": "55e3e1c74cd5e2bc",
+            "model_type": "logistic_regression",
+            "phase": "Phase 1 Baseline",
+            "test_accuracy": "0.9000",
+            "test_f1_macro": "0.8900",
+            "rvce_accuracy": "0.8800"
+          },
+          "metrics": {
+            "test_accuracy": 0.9,
+            "test_f1_macro": 0.89,
+            "test_f1_micro": 0.89,
+            "rvce_accuracy": 0.88,
+            "cv_f1_macro_std": 0.008,
+            "test_size_n": 128.0,
+            "rvce_majority_baseline_accuracy": 0.35,
+            "rvce_n": 30.0
+          },
+          "parameters": {
+            "model_type": "logistic_regression",
+            "data_hash": "55e3e1c74cd5e2bc",
+            "data_file": "data/processed/ct_dataset.parquet",
+            "seed": "42",
+            "test_size_n": "128",
+            "phase": "Phase 1 - Baseline"
+          }
+        },
+        {
+          "version": 2,
+          "stage": "Staging",
+          "status": "READY",
+          "run_id": "758d670ba9364abba043ea6eac06ca30",
+          "run_name": "xgboost_improved",
+          "created_at": "1794486585655",
+          "tags": {
+            "data_hash": "55e3e1c74cd5e2bc",
+            "model_type": "xgboost",
+            "phase": "Phase 2 Challenger",
+            "test_accuracy": "0.9200",
+            "test_f1_macro": "0.9100",
+            "rvce_accuracy": "0.9000"
+          },
+          "metrics": {
+            "test_accuracy": 0.92,
+            "test_f1_macro": 0.91,
+            "test_f1_micro": 0.91,
+            "rvce_accuracy": 0.9,
+            "cv_f1_macro_std": 0.008,
+            "test_size_n": 128.0,
+            "rvce_majority_baseline_accuracy": 0.35,
+            "rvce_n": 30.0
+          },
+          "parameters": {
+            "model_type": "xgboost",
+            "data_hash": "55e3e1c74cd5e2bc",
+            "data_file": "data/processed/ct_dataset.parquet",
+            "seed": "42",
+            "test_size_n": "128",
+            "phase": "Phase 2 - Production Challenger"
+          }
+        }
+      ]
+    }
+  }
+}
