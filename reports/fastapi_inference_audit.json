@@ -1,0 +1,167 @@
+{
+  "generated_at": "2026-11-12T18:00:17.247571",
+  "service_name": "QuestionCraft FastAPI Inference Engine",
+  "api_version": "2.0.0",
+  "endpoints_audited": {
+    "GET /health": {
+      "status_code": 200,
+      "response_payload": {
+        "status": "healthy",
+        "version": "2.0.0",
+        "models_loaded": {
+          "difficulty": true,
+          "blooms": true,
+          "ct": true
+        },
+        "mlflow_connected": true,
+        "uptime_seconds": 4.22
+      }
+    },
+    "POST /predict (Hard Question)": {
+      "status_code": 200,
+      "request_payload": {
+        "question_text": "Design and implement a cache-aware B-Tree indexing engine for high-throughput persistent key-value storage."
+      },
+      "response_payload": {
+        "question_text": "Design and implement a cache-aware B-Tree indexing engine for high-throughput persistent key-value storage.",
+        "difficulty": "Hard",
+        "difficulty_confidence": 0.7239,
+        "blooms_level": "L6",
+        "blooms_confidence": 0.6123,
+        "ct_skills": [
+          "Decomposition",
+          "Abstraction",
+          "Algorithmic Thinking"
+        ],
+        "ct_confidences": {}
+      }
+    },
+    "POST /predict (Easy Question)": {
+      "status_code": 200,
+      "request_payload": {
+        "question_text": "Define a binary search tree and state its properties."
+      },
+      "response_payload": {
+        "question_text": "Define a binary search tree and state its properties.",
+        "difficulty": "Easy",
+        "difficulty_confidence": 0.7624,
+        "blooms_level": "L1",
+        "blooms_confidence": 0.6667,
+        "ct_skills": [
+          "Pattern Recognition"
+        ],
+        "ct_confidences": {}
+      }
+    },
+    "POST /batch/classify": {
+      "status_code": 200,
+      "total_questions_in_batch": 3,
+      "response_payload": {
+        "results": [
+          {
+            "question_text": "Define a binary search tree and state its properties.",
+            "difficulty": "Easy",
+            "difficulty_confidence": 0.7624,
+            "blooms_level": "L1",
+            "blooms_confidence": 0.6667,
+            "ct_skills": [
+              "Pattern Recognition"
+            ],
+            "ct_confidences": {}
+          },
+          {
+            "question_text": "Apply Dijkstra algorithm to compute single-source shortest paths in a directed graph.",
+            "difficulty": "Medium",
+            "difficulty_confidence": 0.6825,
+            "blooms_level": "L3",
+            "blooms_confidence": 0.5235,
+            "ct_skills": [
+              "Algorithmic Thinking"
+            ],
+            "ct_confidences": {}
+          },
+          {
+            "question_text": "Synthesize a Red-Black tree deletion routine handling double-black structural rebalancing.",
+            "difficulty": "Hard",
+            "difficulty_confidence": 0.6866,
+            "blooms_level": "L6",
+            "blooms_confidence": 0.5745,
+            "ct_skills": [
+              "Algorithmic Thinking",
+              "Evaluation & Debugging"
+            ],
+            "ct_confidences": {}
+          }
+        ],
+        "model_versions": {
+          "difficulty": "local-1794461070175765900",
+          "blooms": "local-1794461070235919900",
+          "ct": "local-1794461070364772200"
+        },
+        "inference_time_ms": 17.08
+      }
+    },
+    "POST /deploy/canary (15% Traffic)": {
+      "status_code": 200,
+      "canary_response": {
+        "message": "Canary ratio set to 15.0%",
+        "strategy": "canary"
+      },
+      "deployment_status": {
+        "active_strategy": "canary-15pct",
+        "canary_ratio": 0.15,
+        "canary_models_available": false,
+        "production_models": {
+          "difficulty": "local-1794461070175765900",
+          "blooms": "local-1794461070235919900",
+          "ct": "local-1794461070364772200"
+        }
+      }
+    },
+    "GET /models/info": {
+      "status_code": 200,
+      "response_payload": {
+        "models": {
+          "difficulty": "local-1794461070175765900",
+          "blooms": "local-1794461070235919900",
+          "ct": "local-1794461070364772200"
+        },
+        "canary_models": {},
+        "canary_ratio": 0.0,
+        "registry_stages": {
+          "difficulty": {
+            "2": "Staging",
+            "1": "Production"
+          },
+          "blooms": {
+            "2": "Staging",
+            "1": "Production"
+          },
+          "ct": {
+            "2": "Staging",
+            "1": "Production"
+          }
+        },
+        "status": {
+          "difficulty": true,
+          "blooms": true,
+          "ct": true
+        }
+      }
+    },
+    "GET /metrics": {
+      "status_code": 200,
+      "content_type": "text/plain; version=0.0.4; charset=utf-8",
+      "sample_lines": [
+        "questioncraft_requests_total{endpoint=\"/health\"} 1",
+        "questioncraft_requests_total{endpoint=\"/predict\"} 2",
+        "questioncraft_requests_total{endpoint=\"/batch/classify\"} 1",
+        "questioncraft_requests_total{endpoint=\"/deploy/canary\"} 2",
+        "questioncraft_requests_total{endpoint=\"/deploy/status\"} 1",
+        "questioncraft_requests_total{endpoint=\"/models/info\"} 1",
+        "questioncraft_request_latency_seconds_total{endpoint=\"/health\"} 0.003551",
+        "questioncraft_request_latency_seconds_total{endpoint=\"/predict\"} 0.036133"
+      ]
+    }
+  }
+}

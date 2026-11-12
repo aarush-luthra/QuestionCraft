@@ -1,0 +1,33 @@
+{
+  "generated_at": "2026-11-12T18:00:21.797734",
+  "ci_cd_pipeline": "GitHub Actions (.github/workflows/ci.yml)",
+  "code_quality_checks": {
+    "ruff_linter": {
+      "command": "ruff check src/ tests/ scripts/",
+      "status": "PASSED (0 errors)"
+    },
+    "black_formatter": {
+      "command": "black --check --line-length 100 src/ tests/ scripts/",
+      "status": "PASSED (47 files checked, 100% compliant)"
+    }
+  },
+  "automated_test_suite": {
+    "test_runner": "pytest 9.0.3",
+    "total_tests_collected": 53,
+    "tests_passed": 53,
+    "tests_failed": 0,
+    "pass_rate_percentage": 100.0,
+    "test_modules_tested": [
+      "tests/test_feature_engineering.py (Feature extraction, NLP verbs, CT keywords)",
+      "tests/test_model_quality.py (Data validation suite, 6 Quality Gates, Promotion refusal)",
+      "tests/test_models.py (Label normalization, CT parsing, hyperparameter configs)",
+      "tests/test_serving.py (Pydantic schemas, ModelStore, Prometheus text format, reload)",
+      "tests/test_utils.py (Config loader, deterministic seed setting, MD5 dataframe hash)"
+    ]
+  },
+  "docker_container_smoke_test": {
+    "dockerfile": "Dockerfile (Multi-stage: builder -> production)",
+    "compose_file": "docker-compose.yml (4 services: API, MLflow, Prometheus, Grafana)",
+    "smoke_test_assertion": "curl -s http://localhost:8000/health returns HTTP 200 with all models loaded"
+  }
+}
